@@ -1,228 +1,316 @@
 /* docs/assets/site.js */
 const REPO = "ripplethor/macfuseGUI";
+const root = document.documentElement;
 
-// DOM Elements
-const themeToggle = document.getElementById('theme-toggle');
-const themeToggleLabel = document.getElementById('theme-toggle-label');
-const downloadBtn = document.getElementById('download-btn');
-const githubBtn = document.getElementById('github-btn');
-const yearSpan = document.getElementById('current-year');
+const themeToggle = document.getElementById("theme-toggle");
+const themeToggleLabel = document.getElementById("theme-toggle-label");
+const downloadBtn = document.getElementById("download-btn");
+const githubBtn = document.getElementById("github-btn");
+const footerGithubBtn = document.getElementById("footer-github-btn");
+const yearSpan = document.getElementById("current-year");
 
-// Theme Logic
+const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+if (!prefersReducedMotion.matches) {
+    root.classList.add("motion-enabled");
+}
+
 function initTheme() {
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const savedTheme = localStorage.getItem("theme");
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
 
-    // Only force if user has explicitly saved a preference
-    if (savedTheme === 'dark') {
-        document.documentElement.classList.add('dark');
-    } else if (savedTheme === 'light') {
-        document.documentElement.classList.remove('dark');
+    if (savedTheme === "dark") {
+        root.classList.add("dark");
+    } else if (savedTheme === "light") {
+        root.classList.remove("dark");
+    } else if (prefersDark) {
+        root.classList.add("dark");
     } else {
-        // No saved preference: follow system
-        if (prefersDark) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
-        // Do NOT write to localStorage here, keeps "system sync" active
+        root.classList.remove("dark");
     }
+
     updateThemeUI();
 }
 
 function toggleTheme() {
-    const isDark = document.documentElement.classList.toggle('dark');
-    const newTheme = isDark ? 'dark' : 'light';
-    localStorage.setItem('theme', newTheme);
+    const isDark = root.classList.toggle("dark");
+    localStorage.setItem("theme", isDark ? "dark" : "light");
     updateThemeUI();
 }
 
 function updateThemeUI() {
-    const isDark = document.documentElement.classList.contains('dark');
+    const isDark = root.classList.contains("dark");
     if (themeToggle) {
-        themeToggle.setAttribute('aria-pressed', isDark);
+        themeToggle.setAttribute("aria-pressed", String(isDark));
     }
     if (themeToggleLabel) {
-        themeToggleLabel.textContent = isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+        themeToggleLabel.textContent = isDark ? "Switch to Light Mode" : "Switch to Dark Mode";
     }
 }
 
-// Dynamic Links
 function setupLinks() {
+    const releasesUrl = `https://github.com/${REPO}/releases/latest`;
+    const repoUrl = `https://github.com/${REPO}`;
+
     if (downloadBtn) {
-        downloadBtn.href = `https://github.com/${REPO}/releases/latest`;
+        downloadBtn.href = releasesUrl;
     }
     if (githubBtn) {
-        githubBtn.href = `https://github.com/${REPO}`;
+        githubBtn.href = repoUrl;
     }
-
-    // Wire up footer GitHub link if present
-    const footerGithub = document.getElementById('footer-github-btn');
-    if (footerGithub) {
-        footerGithub.href = `https://github.com/${REPO}`;
+    if (footerGithubBtn) {
+        footerGithubBtn.href = repoUrl;
     }
 }
 
-// Copyright Year
 function setYear() {
     if (yearSpan) {
-        yearSpan.textContent = new Date().getFullYear();
+        yearSpan.textContent = String(new Date().getFullYear());
     }
 }
 
-// FAQ Accordion
 function setupAccordion() {
-    const triggers = document.querySelectorAll('[data-accordion-trigger]');
+    const triggers = Array.from(document.querySelectorAll("[data-accordion-trigger]"));
+    if (!triggers.length) return;
 
-    function setPanelState(trigger, panel, isExpanded) {
-        trigger.setAttribute('aria-expanded', String(isExpanded));
-        if (!panel) return;
-        panel.hidden = !isExpanded;
-        panel.classList.toggle('hidden', !isExpanded);
+    function setPanelState(trigger, expanded) {
+        const controlsId = trigger.getAttribute("aria-controls");
+        const panel = controlsId ? document.getElementById(controlsId) : null;
+        trigger.setAttribute("aria-expanded", String(expanded));
 
-        const chevron = trigger.querySelector('svg');
+        if (panel) {
+            panel.hidden = !expanded;
+            panel.classList.toggle("hidden", !expanded);
+        }
+
+        const chevron = trigger.querySelector("svg");
         if (chevron) {
-            chevron.style.transform = isExpanded ? 'rotate(180deg)' : 'rotate(0deg)';
+            chevron.style.transform = expanded ? "rotate(180deg)" : "rotate(0deg)";
         }
     }
 
-    triggers.forEach(trigger => {
-        trigger.addEventListener('click', () => {
-            const isExpanded = trigger.getAttribute('aria-expanded') === 'true';
-            const controlsId = trigger.getAttribute('aria-controls');
-            const panel = document.getElementById(controlsId);
+    function closeOthers(activeTrigger) {
+        triggers.forEach((otherTrigger) => {
+            if (otherTrigger !== activeTrigger) {
+                setPanelState(otherTrigger, false);
+            }
+        });
+    }
 
-            // Keep a clean one-open-at-a-time interaction.
-            triggers.forEach(otherTrigger => {
-                if (otherTrigger === trigger) return;
-                const otherControlsId = otherTrigger.getAttribute('aria-controls');
-                const otherPanel = document.getElementById(otherControlsId);
-                setPanelState(otherTrigger, otherPanel, false);
-            });
+    function focusTrigger(index) {
+        if (index < 0 || index >= triggers.length) return;
+        triggers[index].focus();
+    }
 
-            setPanelState(trigger, panel, !isExpanded);
+    triggers.forEach((trigger, index) => {
+        const initiallyExpanded = trigger.getAttribute("aria-expanded") === "true";
+        setPanelState(trigger, initiallyExpanded);
+
+        trigger.addEventListener("click", () => {
+            const expanded = trigger.getAttribute("aria-expanded") === "true";
+            closeOthers(trigger);
+            setPanelState(trigger, !expanded);
         });
 
-        // Normalize initial state from markup.
-        const controlsId = trigger.getAttribute('aria-controls');
-        const panel = document.getElementById(controlsId);
-        const expanded = trigger.getAttribute('aria-expanded') === 'true';
-        if (panel) {
-            const shouldExpand = expanded && !panel.classList.contains('hidden') && !panel.hidden;
-            setPanelState(trigger, panel, shouldExpand);
-        } else {
-            trigger.setAttribute('aria-expanded', 'false');
-            const chevron = trigger.querySelector('svg');
-            if (chevron) {
-                chevron.style.transform = 'rotate(0deg)';
+        trigger.addEventListener("keydown", (event) => {
+            if (event.key === "ArrowDown") {
+                event.preventDefault();
+                focusTrigger((index + 1) % triggers.length);
+            } else if (event.key === "ArrowUp") {
+                event.preventDefault();
+                focusTrigger((index - 1 + triggers.length) % triggers.length);
+            } else if (event.key === "Home") {
+                event.preventDefault();
+                focusTrigger(0);
+            } else if (event.key === "End") {
+                event.preventDefault();
+                focusTrigger(triggers.length - 1);
             }
-        }
+        });
     });
 }
 
+function setupHeaderMotion() {
+    const header = document.querySelector("header");
+    if (!header) return;
 
-// Scroll Observer for Animations
-function setupScrollObserver() {
-    const hiddenElements = document.querySelectorAll('.reveal-on-scroll');
-    if (!hiddenElements.length) return;
-
-    // No observer support: reveal immediately.
-    if (!('IntersectionObserver' in window)) {
-        hiddenElements.forEach((el) => el.classList.add('reveal-visible'));
-        return;
-    }
-
-    const observerOptions = {
-        root: null,
-        // Trigger earlier so content feels responsive while scrolling.
-        rootMargin: '0px 0px 24% 0px',
-        threshold: [0, 0.06]
+    const syncHeader = () => {
+        header.dataset.scrolled = window.scrollY > 8 ? "true" : "false";
     };
 
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            const target = entry.target;
-            const isFullyOutOfView =
-                entry.boundingClientRect.bottom < 0 ||
-                entry.boundingClientRect.top > window.innerHeight;
+    syncHeader();
+    window.addEventListener("scroll", syncHeader, { passive: true });
+}
 
-            if (entry.isIntersecting && entry.intersectionRatio >= 0.02) {
-                target.classList.add('reveal-visible');
-            } else if (isFullyOutOfView) {
-                // Reset once fully off-screen so animation replays when revisiting sections.
-                target.classList.remove('reveal-visible');
+function delayForElement(element) {
+    if (element.classList.contains("delay-300")) return 210;
+    if (element.classList.contains("delay-200")) return 140;
+    if (element.classList.contains("delay-100")) return 70;
+    return 0;
+}
+
+function variantForElement(element, index) {
+    if (element.dataset.reveal) return element.dataset.reveal;
+    if (element.classList.contains("text-center")) return "up-soft";
+    const cycle = ["up", "left", "right", "up-soft"];
+    return cycle[index % cycle.length];
+}
+
+function setupScrollReveal() {
+    const elements = Array.from(document.querySelectorAll(".reveal-on-scroll"));
+    if (!elements.length) return;
+
+    elements.forEach((element, index) => {
+        element.style.setProperty("--reveal-delay", `${delayForElement(element)}ms`);
+        element.dataset.reveal = variantForElement(element, index);
+    });
+
+    const showAll = () => {
+        elements.forEach((element) => element.classList.add("reveal-visible"));
+    };
+
+    const hideAll = () => {
+        elements.forEach((element) => element.classList.remove("reveal-visible"));
+    };
+
+    let rafId = 0;
+    let listenersAttached = false;
+
+    const runRevealPass = () => {
+        rafId = 0;
+        const vh = window.innerHeight || root.clientHeight;
+        const revealLine = vh * 0.96;
+        const activeTop = vh * 0.02;
+        const resetTop = -vh * 0.22;
+        const resetBottom = vh * 1.18;
+
+        elements.forEach((element) => {
+            const rect = element.getBoundingClientRect();
+            const shouldReveal = rect.top <= revealLine && rect.bottom >= activeTop;
+            const fullyOutOfRange = rect.bottom < resetTop || rect.top > resetBottom;
+
+            if (shouldReveal) {
+                element.classList.add("reveal-visible");
+            } else if (fullyOutOfRange) {
+                element.classList.remove("reveal-visible");
             }
         });
-    }, observerOptions);
+    };
 
-    hiddenElements.forEach((el) => observer.observe(el));
-}
+    const scheduleRevealPass = () => {
+        if (rafId) return;
+        rafId = window.requestAnimationFrame(runRevealPass);
+    };
 
-// Hero Animation (Typewriter)
-function initHeroAnimation() {
-    const terminalText = document.querySelector('.typing-text');
-    if (!terminalText) return;
+    const onScroll = () => scheduleRevealPass();
+    const onResize = () => scheduleRevealPass();
+    const onOrientationChange = () => scheduleRevealPass();
 
-    const messages = [
-        "Resolving host db.production.internal...",
-        "Authenticating with public key...",
-        "Mounting remote filesystem...",
-        "Connection established."
-    ];
+    const start = () => {
+        if (listenersAttached) return;
+        listenersAttached = true;
+        window.addEventListener("scroll", onScroll, { passive: true });
+        window.addEventListener("resize", onResize);
+        window.addEventListener("orientationchange", onOrientationChange);
+        runRevealPass();
+    };
 
-    let msgIndex = 0;
-    let charIndex = 0;
-    let isDeleting = false;
-    let typeSpeed = 50;
+    const stop = () => {
+        if (!listenersAttached) return;
+        listenersAttached = false;
+        window.removeEventListener("scroll", onScroll);
+        window.removeEventListener("resize", onResize);
+        window.removeEventListener("orientationchange", onOrientationChange);
+        if (rafId) {
+            window.cancelAnimationFrame(rafId);
+            rafId = 0;
+        }
+    };
 
-    function type() {
-        const currentMsg = messages[msgIndex];
-
-        if (isDeleting) {
-            terminalText.textContent = currentMsg.substring(0, charIndex - 1);
-            charIndex--;
-            typeSpeed = 30;
+    const syncMotionMode = () => {
+        if (prefersReducedMotion.matches) {
+            stop();
+            root.classList.remove("motion-enabled");
+            showAll();
         } else {
-            terminalText.textContent = currentMsg.substring(0, charIndex + 1);
-            charIndex++;
-            typeSpeed = 50;
+            root.classList.add("motion-enabled");
+            hideAll();
+            start();
         }
+    };
 
-        if (!isDeleting && charIndex === currentMsg.length) {
-            // Finished typing sentence
-            if (msgIndex === messages.length - 1) {
-                // Final message, stop
-                terminalText.classList.remove('border-r-2'); // Stop blinking cursor
-                return;
-            }
-            isDeleting = true;
-            typeSpeed = 1000; // Pause at end
-        } else if (isDeleting && charIndex === 0) {
-            // Finished deleting
-            isDeleting = false;
-            msgIndex++;
-            typeSpeed = 500; // Pause before next
-        }
-
-        setTimeout(type, typeSpeed);
+    if (typeof prefersReducedMotion.addEventListener === "function") {
+        prefersReducedMotion.addEventListener("change", syncMotionMode);
+    } else if (typeof prefersReducedMotion.addListener === "function") {
+        prefersReducedMotion.addListener(syncMotionMode);
     }
 
-    // Start after initial reveal
-    setTimeout(type, 1500);
+    syncMotionMode();
 }
 
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    // Theme is handled by inline script in head, but we re-run init to sync UI state
+function setupHeroParallax() {
+    if (prefersReducedMotion.matches) return;
+
+    const heroStage = document.querySelector(".perspective-1000 > div");
+    if (!heroStage) return;
+    heroStage.classList.add("hero-stage");
+
+    let rafId = 0;
+    let targetX = 0;
+    let targetY = 0;
+    let currentX = 0;
+    let currentY = 0;
+
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+    const animate = () => {
+        rafId = 0;
+        currentX += (targetX - currentX) * 0.12;
+        currentY += (targetY - currentY) * 0.12;
+
+        const lift = Math.abs(currentY) * 0.45 + Math.abs(currentX) * 0.2;
+        heroStage.style.transform = `perspective(1400px) rotateX(${currentY.toFixed(2)}deg) rotateY(${currentX.toFixed(2)}deg) translate3d(0, ${(-lift).toFixed(2)}px, 0)`;
+
+        if (Math.abs(targetX - currentX) > 0.02 || Math.abs(targetY - currentY) > 0.02) {
+            rafId = window.requestAnimationFrame(animate);
+        }
+    };
+
+    const requestTick = () => {
+        if (!rafId) {
+            rafId = window.requestAnimationFrame(animate);
+        }
+    };
+
+    const handlePointerMove = (event) => {
+        const rect = heroStage.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / rect.width - 0.5;
+        const y = (event.clientY - rect.top) / rect.height - 0.5;
+
+        targetX = clamp(x * 6, -6, 6);
+        targetY = clamp(-y * 5, -5, 5);
+        requestTick();
+    };
+
+    const handlePointerLeave = () => {
+        targetX = 0;
+        targetY = 0;
+        requestTick();
+    };
+
+    heroStage.addEventListener("pointermove", handlePointerMove);
+    heroStage.addEventListener("pointerleave", handlePointerLeave);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
     initTheme();
-
-    if (themeToggle) {
-        themeToggle.addEventListener('click', toggleTheme);
-    }
-
     setupLinks();
     setYear();
     setupAccordion();
-    setupScrollObserver();
-    initHeroAnimation();
+    setupHeaderMotion();
+    setupScrollReveal();
+    setupHeroParallax();
+
+    if (themeToggle) {
+        themeToggle.addEventListener("click", toggleTheme);
+    }
 });
