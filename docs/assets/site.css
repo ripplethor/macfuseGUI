@@ -488,8 +488,10 @@ body {
 /* Scroll Reveal */
 .reveal-on-scroll {
     opacity: 0;
-    transform: translateY(30px) scale(0.98);
-    transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    transform: translate3d(0, 18px, 0);
+    transition-property: opacity, transform;
+    transition-duration: 560ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
     will-change: opacity, transform;
 }
 
@@ -510,19 +512,19 @@ body {
 
 .reveal-visible {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate3d(0, 0, 0);
 }
 
 .delay-100 {
-    transition-delay: 100ms;
+    transition-delay: 60ms;
 }
 
 .delay-200 {
-    transition-delay: 200ms;
+    transition-delay: 120ms;
 }
 
 .delay-300 {
-    transition-delay: 300ms;
+    transition-delay: 180ms;
 }
 
 /* Focus Accessibility */

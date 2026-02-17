@@ -123,10 +123,20 @@ function setupAccordion() {
 
 // Scroll Observer for Animations
 function setupScrollObserver() {
+    const hiddenElements = document.querySelectorAll('.reveal-on-scroll');
+    if (!hiddenElements.length) return;
+
+    // No observer support: reveal immediately.
+    if (!('IntersectionObserver' in window)) {
+        hiddenElements.forEach((el) => el.classList.add('reveal-visible'));
+        return;
+    }
+
     const observerOptions = {
         root: null,
-        rootMargin: '0px',
-        threshold: 0.1
+        // Reveal slightly before elements fully enter the viewport.
+        rootMargin: '0px 0px 18% 0px',
+        threshold: 0.01
     };
 
     const observer = new IntersectionObserver((entries, observer) => {
@@ -138,8 +148,14 @@ function setupScrollObserver() {
         });
     }, observerOptions);
 
-    const hiddenElements = document.querySelectorAll('.reveal-on-scroll');
-    hiddenElements.forEach((el) => observer.observe(el));
+    hiddenElements.forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        if (rect.top < window.innerHeight * 0.98) {
+            el.classList.add('reveal-visible');
+            return;
+        }
+        observer.observe(el);
+    });
 }
 
 // Hero Animation (Typewriter)
