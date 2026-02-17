@@ -1,0 +1,730 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0954232ABBBE1E79AD928C08 /* ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3946211003B1FB7FCB040BDF /* ProcessRunner.swift */; };
+		103A7C95077E922349BC6533 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D46D6D34DC8DC231BA9AFF78 /* KeychainService.swift */; };
+		10C10B21DCDEC2AD88223A8E /* AppError.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5C3E3B9C41A26A4B3756212 /* AppError.swift */; };
+		137F4DB2EF0C3B99EAFE6F75 /* MountRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = A05E9274C616A1D6999000F5 /* MountRecord.swift */; };
+		149E572890F1AB3C2ED44EAA /* BrowserConnectionHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 371B5AC84818F7618819D2A8 /* BrowserConnectionHealth.swift */; };
+		1C3944B08AAB503DAB4380E1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 976EB96BF9E5A1C8D50860B3 /* Assets.xcassets */; };
+		1D539CE204684F2D462B9185 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5333BB89C1E9FAC18A830BE0 /* Cocoa.framework */; };
+		2335A002D328BC9D1DA35F36 /* MountStateParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A96918F57E9D9026D082782 /* MountStateParser.swift */; };
+		268CCDDF373D9C59FBB4B026 /* LibSSH2Bridge.c in Sources */ = {isa = PBXBuildFile; fileRef = 9478F791851F30BD96455F9C /* LibSSH2Bridge.c */; };
+		2A046DE8D98F318CF458C9FF /* DiagnosticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5831A43EDDC8CEF100C95F22 /* DiagnosticsService.swift */; };
+		37D24383F66D11BE62644D6A /* RemoteConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE172C849059518AB43E41B5 /* RemoteConfig.swift */; };
+		39B616918869CCCCD2B7DD83 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 669A942DC63A9D80565BF29E /* AppDelegate.swift */; };
+		416FEA583FF4FA070007042C /* BrowserPathNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5578991D836A100D616ED806 /* BrowserPathNormalizer.swift */; };
+		424336D6132B83926F3E3AA5 /* KeychainServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDC2BE588D03C7E5B66BEBBE /* KeychainServiceTests.swift */; };
+		4F7DB607B3635F7C61DF04FE /* RemoteEditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB018E9A50CDE2EE47C1DAFB /* RemoteEditorViewModel.swift */; };
+		52E9E3C610DF483B3A06A980 /* RemoteBrowserSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0E6A98E0C44B4D2FD444ECE /* RemoteBrowserSessionManager.swift */; };
+		5577B08E2000F9BDB54A1DC3 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5333BB89C1E9FAC18A830BE0 /* Cocoa.framework */; };
+		5D8518327271BCFD0F9C51D4 /* MountStateParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62E8919B0F450B3D28E534FE /* MountStateParserTests.swift */; };
+		68FE10FA44D00152E0BB61FB /* macfuseGuiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F005AF400340F242FC36A6D3 /* macfuseGuiApp.swift */; };
+		6A706AFCFCCBD66A6136C911 /* SettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48A069D1C312D3617BA6DA2F /* SettingsRootView.swift */; };
+		73DA5932FEE9C129AA1280F7 /* SFTPDirectoryParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B12EFDD63AACEF8CB0DC5D00 /* SFTPDirectoryParser.swift */; };
+		7ADAD9C1FD8FEA7F21F18A0E /* RemoteDirectoryParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0005112E3D4EDABBAF4A9D7 /* RemoteDirectoryParserTests.swift */; };
+		7B5B776AE8B25B3E81E2F97C /* RemoteDirectoryBrowserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B097402DC8306864DA634626 /* RemoteDirectoryBrowserService.swift */; };
+		883394C334D4AF8AB841FBD7 /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDCD710A9872EC06F8D3E842 /* SettingsWindowController.swift */; };
+		97604450C7067129182F2289 /* RemoteEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A763DCE9F635F70644D1DC3 /* RemoteEditorView.swift */; };
+		991BBF1365696767B7005FF9 /* RemotesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6620E449473E2C45D70E00A3 /* RemotesListView.swift */; };
+		9BD3D961E7654A29636A1EBC /* ValidationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C39D6153CFB9FB2C9B7A13D9 /* ValidationServiceTests.swift */; };
+		9BF77D70B94A2397034BF606 /* MountArgBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1CEF0B82125E597B943366 /* MountArgBuilderTests.swift */; };
+		9F340F05EAA5F5D44B6187B2 /* LibSSH2SessionActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DC9455185A25C4BD66699BD /* LibSSH2SessionActor.swift */; };
+		A1C3E5F7092B4D6F8A0C2E4A /* ProcessRunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D4F6081A3C5E7F9B1D3F5B /* ProcessRunnerTests.swift */; };
+		AE2E6207DCB2A8676E70F39E /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D93B3F2F6B952ABC56E126B5 /* MenuBarController.swift */; };
+		AF3682692F0C4028511D5C30 /* DependencyChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B675FE49225F98D782450A /* DependencyChecker.swift */; };
+		B3ECAB6B9206097A103F8D5A /* MountManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FFCCBA28584A224841831D5 /* MountManager.swift */; };
+		B8C805F60A25132645BF0868 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14D6B5E59F24E237BE9A2048 /* AppEnvironment.swift */; };
+		B9B9DD53B672CCF3B2442B37 /* RemoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FB155E1FF0B98531B0C8C4B /* RemoteStore.swift */; };
+		BA3142C836207CF9B8BE61AC /* RedactionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA10409810D1DB9F46D4E5B7 /* RedactionService.swift */; };
+		BAE25CD86EEE27E08AA86AA7 /* AskpassHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A78A6FDFEEC9F26E054500D /* AskpassHelper.swift */; };
+		BAF96CCFF550B74EF7D56722 /* LibSSH2SFTPTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDF9ABAEACCB5A16404C9B83 /* LibSSH2SFTPTransport.swift */; };
+		C8BD663B6D66F153BD044241 /* RemotesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB35A7160C828EC1AA4DF0A3 /* RemotesViewModel.swift */; };
+		CAD195A6835E99871A2E8DFA /* StatusBadgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22986616151ECF9353FCC261 /* StatusBadgeView.swift */; };
+		CF60BFAF2681BD9F8E86E8EB /* MountCommandBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F89221BEA6FA740F83907CDB /* MountCommandBuilder.swift */; };
+		D2AFF0BE1B0446CEE2AE0595 /* RemoteAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB6DB87BF922E1AFEAE71549 /* RemoteAuth.swift */; };
+		DAE18CD23835CC632F50111F /* ValidationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A17164CCBD3C4228D1F3FE /* ValidationService.swift */; };
+		DC9AA73836082601A65FC04A /* RemotesViewModelHelpersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC599F0E6383A858F6D90A7B /* RemotesViewModelHelpersTests.swift */; };
+		DD76347C4BBFDF22B470F871 /* RemoteStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E459D411DBB2F03947805CA /* RemoteStatus.swift */; };
+		E4F86048F3B59B6F34ED5D36 /* RemoteBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B40D202543074E8C13B9052 /* RemoteBrowserView.swift */; };
+		E657E9F6C0A3373CD7B29B31 /* UnmountServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36C50FBC2DF7C3C520F9D2E3 /* UnmountServiceTests.swift */; };
+		ED4E67F8CBE6DCEBB00FFFF5 /* RemoteBrowserViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6FB986B4AC914C9EF18E4E2 /* RemoteBrowserViewModel.swift */; };
+		F93DDB9D2D08ACEA0EDEBD5D /* UnmountService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1397ABA1500C2F6FAA5A943C /* UnmountService.swift */; };
+		FAB35C574ABD1A056E4A99A8 /* RemoteStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06148311183BDBFC0D84CE6B /* RemoteStoreTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		6E72E4532ADE7442FDB94C1D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D9DDA56017440A92738C8CFE /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 925F0C8672D220E3216BD140;
+			remoteInfo = macfuseGui;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		06148311183BDBFC0D84CE6B /* RemoteStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteStoreTests.swift; sourceTree = "<group>"; };
+		0FB155E1FF0B98531B0C8C4B /* RemoteStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteStore.swift; sourceTree = "<group>"; };
+		1397ABA1500C2F6FAA5A943C /* UnmountService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UnmountService.swift; sourceTree = "<group>"; };
+		14D6B5E59F24E237BE9A2048 /* AppEnvironment.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
+		1DC9455185A25C4BD66699BD /* LibSSH2SessionActor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LibSSH2SessionActor.swift; path = Browser/LibSSH2SessionActor.swift; sourceTree = "<group>"; };
+		22986616151ECF9353FCC261 /* StatusBadgeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StatusBadgeView.swift; sourceTree = "<group>"; };
+		36C50FBC2DF7C3C520F9D2E3 /* UnmountServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UnmountServiceTests.swift; sourceTree = "<group>"; };
+		371B5AC84818F7618819D2A8 /* BrowserConnectionHealth.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BrowserConnectionHealth.swift; sourceTree = "<group>"; };
+		3946211003B1FB7FCB040BDF /* ProcessRunner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProcessRunner.swift; sourceTree = "<group>"; };
+		3A763DCE9F635F70644D1DC3 /* RemoteEditorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteEditorView.swift; sourceTree = "<group>"; };
+		3B40D202543074E8C13B9052 /* RemoteBrowserView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteBrowserView.swift; sourceTree = "<group>"; };
+		3E459D411DBB2F03947805CA /* RemoteStatus.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteStatus.swift; sourceTree = "<group>"; };
+		48A069D1C312D3617BA6DA2F /* SettingsRootView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsRootView.swift; sourceTree = "<group>"; };
+		51A17164CCBD3C4228D1F3FE /* ValidationService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ValidationService.swift; sourceTree = "<group>"; };
+		5333BB89C1E9FAC18A830BE0 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
+		5578991D836A100D616ED806 /* BrowserPathNormalizer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BrowserPathNormalizer.swift; path = Browser/BrowserPathNormalizer.swift; sourceTree = "<group>"; };
+		5831A43EDDC8CEF100C95F22 /* DiagnosticsService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DiagnosticsService.swift; sourceTree = "<group>"; };
+		5FFCCBA28584A224841831D5 /* MountManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MountManager.swift; sourceTree = "<group>"; };
+		62E8919B0F450B3D28E534FE /* MountStateParserTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MountStateParserTests.swift; sourceTree = "<group>"; };
+		6620E449473E2C45D70E00A3 /* RemotesListView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemotesListView.swift; sourceTree = "<group>"; };
+		669A942DC63A9D80565BF29E /* AppDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		7A96918F57E9D9026D082782 /* MountStateParser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MountStateParser.swift; sourceTree = "<group>"; };
+		7EB79520054BBFFA2D15AA3D /* macfuseGui.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = macfuseGui.app; path = macfuseGui.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		87DAF630CAB61DDD67C4626B /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		8A3C35C9E6FF92BEE7655E2D /* LibSSH2Bridge.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = LibSSH2Bridge.h; path = Browser/LibSSH2Bridge.h; sourceTree = "<group>"; };
+		8A78A6FDFEEC9F26E054500D /* AskpassHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AskpassHelper.swift; sourceTree = "<group>"; };
+		9478F791851F30BD96455F9C /* LibSSH2Bridge.c */ = {isa = PBXFileReference; includeInIndex = 1; name = LibSSH2Bridge.c; path = Browser/LibSSH2Bridge.c; sourceTree = "<group>"; };
+		976EB96BF9E5A1C8D50860B3 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A05E9274C616A1D6999000F5 /* MountRecord.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MountRecord.swift; sourceTree = "<group>"; };
+		B097402DC8306864DA634626 /* RemoteDirectoryBrowserService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteDirectoryBrowserService.swift; sourceTree = "<group>"; };
+		B12EFDD63AACEF8CB0DC5D00 /* SFTPDirectoryParser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SFTPDirectoryParser.swift; path = Browser/SFTPDirectoryParser.swift; sourceTree = "<group>"; };
+		B2D4F6081A3C5E7F9B1D3F5B /* ProcessRunnerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProcessRunnerTests.swift; sourceTree = "<group>"; };
+		BDC2BE588D03C7E5B66BEBBE /* KeychainServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KeychainServiceTests.swift; sourceTree = "<group>"; };
+		C0E6A98E0C44B4D2FD444ECE /* RemoteBrowserSessionManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RemoteBrowserSessionManager.swift; path = Browser/RemoteBrowserSessionManager.swift; sourceTree = "<group>"; };
+		C39D6153CFB9FB2C9B7A13D9 /* ValidationServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ValidationServiceTests.swift; sourceTree = "<group>"; };
+		C3B675FE49225F98D782450A /* DependencyChecker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DependencyChecker.swift; sourceTree = "<group>"; };
+		C5C3E3B9C41A26A4B3756212 /* AppError.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppError.swift; sourceTree = "<group>"; };
+		CA1CEF0B82125E597B943366 /* MountArgBuilderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MountArgBuilderTests.swift; sourceTree = "<group>"; };
+		CB35A7160C828EC1AA4DF0A3 /* RemotesViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemotesViewModel.swift; sourceTree = "<group>"; };
+		CDCD710A9872EC06F8D3E842 /* SettingsWindowController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsWindowController.swift; sourceTree = "<group>"; };
+		CE172C849059518AB43E41B5 /* RemoteConfig.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteConfig.swift; sourceTree = "<group>"; };
+		D19C302D84E4D664F6877F76 /* macfuseGuiTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = macfuseGuiTests.xctest; path = macfuseGuiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D46D6D34DC8DC231BA9AFF78 /* KeychainService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
+		D93B3F2F6B952ABC56E126B5 /* MenuBarController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
+		DA10409810D1DB9F46D4E5B7 /* RedactionService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RedactionService.swift; sourceTree = "<group>"; };
+		DC599F0E6383A858F6D90A7B /* RemotesViewModelHelpersTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemotesViewModelHelpersTests.swift; sourceTree = "<group>"; };
+		DDF9ABAEACCB5A16404C9B83 /* LibSSH2SFTPTransport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LibSSH2SFTPTransport.swift; path = Browser/LibSSH2SFTPTransport.swift; sourceTree = "<group>"; };
+		E0005112E3D4EDABBAF4A9D7 /* RemoteDirectoryParserTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteDirectoryParserTests.swift; sourceTree = "<group>"; };
+		F005AF400340F242FC36A6D3 /* macfuseGuiApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = macfuseGuiApp.swift; sourceTree = "<group>"; };
+		F6FB986B4AC914C9EF18E4E2 /* RemoteBrowserViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteBrowserViewModel.swift; sourceTree = "<group>"; };
+		F89221BEA6FA740F83907CDB /* MountCommandBuilder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MountCommandBuilder.swift; sourceTree = "<group>"; };
+		FB018E9A50CDE2EE47C1DAFB /* RemoteEditorViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteEditorViewModel.swift; sourceTree = "<group>"; };
+		FB6DB87BF922E1AFEAE71549 /* RemoteAuth.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteAuth.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		296EFA2AAC40550B74513979 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1D539CE204684F2D462B9185 /* Cocoa.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B8D28B6D16EF94B2B6E8FF91 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5577B08E2000F9BDB54A1DC3 /* Cocoa.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		049798B8772531EB6E48485B /* App */ = {
+			isa = PBXGroup;
+			children = (
+				669A942DC63A9D80565BF29E /* AppDelegate.swift */,
+				14D6B5E59F24E237BE9A2048 /* AppEnvironment.swift */,
+				CDCD710A9872EC06F8D3E842 /* SettingsWindowController.swift */,
+				F005AF400340F242FC36A6D3 /* macfuseGuiApp.swift */,
+			);
+			name = App;
+			path = App;
+			sourceTree = "<group>";
+		};
+		0A9169AF7F808A129BB181EE /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				3B40D202543074E8C13B9052 /* RemoteBrowserView.swift */,
+				3A763DCE9F635F70644D1DC3 /* RemoteEditorView.swift */,
+				6620E449473E2C45D70E00A3 /* RemotesListView.swift */,
+				48A069D1C312D3617BA6DA2F /* SettingsRootView.swift */,
+				22986616151ECF9353FCC261 /* StatusBadgeView.swift */,
+			);
+			name = Views;
+			path = Views;
+			sourceTree = "<group>";
+		};
+		2891DFCFB052DBBE7785BE50 /* macfuseGui */ = {
+			isa = PBXGroup;
+			children = (
+				049798B8772531EB6E48485B /* App */,
+				CE3E4AFDD94688E59BA11A29 /* Models */,
+				50B7D9100F4546561A40E5B6 /* Services */,
+				72C8A9687AD241FE4F854955 /* ViewModels */,
+				0A9169AF7F808A129BB181EE /* Views */,
+				3DA94BE7178A0A001B8CB7FD /* MenuBar */,
+				E8E8D95A47FE199E3ACD3981 /* Resources */,
+			);
+			name = macfuseGui;
+			path = macfuseGui;
+			sourceTree = "<group>";
+		};
+		329D805775AC53C9AC8ADE8A /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				7EB79520054BBFFA2D15AA3D /* macfuseGui.app */,
+				D19C302D84E4D664F6877F76 /* macfuseGuiTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		3DA94BE7178A0A001B8CB7FD /* MenuBar */ = {
+			isa = PBXGroup;
+			children = (
+				D93B3F2F6B952ABC56E126B5 /* MenuBarController.swift */,
+			);
+			name = MenuBar;
+			path = MenuBar;
+			sourceTree = "<group>";
+		};
+		50B7D9100F4546561A40E5B6 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				8A78A6FDFEEC9F26E054500D /* AskpassHelper.swift */,
+				5578991D836A100D616ED806 /* BrowserPathNormalizer.swift */,
+				9478F791851F30BD96455F9C /* LibSSH2Bridge.c */,
+				DDF9ABAEACCB5A16404C9B83 /* LibSSH2SFTPTransport.swift */,
+				1DC9455185A25C4BD66699BD /* LibSSH2SessionActor.swift */,
+				C0E6A98E0C44B4D2FD444ECE /* RemoteBrowserSessionManager.swift */,
+				B12EFDD63AACEF8CB0DC5D00 /* SFTPDirectoryParser.swift */,
+				C3B675FE49225F98D782450A /* DependencyChecker.swift */,
+				5831A43EDDC8CEF100C95F22 /* DiagnosticsService.swift */,
+				D46D6D34DC8DC231BA9AFF78 /* KeychainService.swift */,
+				F89221BEA6FA740F83907CDB /* MountCommandBuilder.swift */,
+				5FFCCBA28584A224841831D5 /* MountManager.swift */,
+				7A96918F57E9D9026D082782 /* MountStateParser.swift */,
+				3946211003B1FB7FCB040BDF /* ProcessRunner.swift */,
+				DA10409810D1DB9F46D4E5B7 /* RedactionService.swift */,
+				B097402DC8306864DA634626 /* RemoteDirectoryBrowserService.swift */,
+				0FB155E1FF0B98531B0C8C4B /* RemoteStore.swift */,
+				1397ABA1500C2F6FAA5A943C /* UnmountService.swift */,
+				51A17164CCBD3C4228D1F3FE /* ValidationService.swift */,
+				8A3C35C9E6FF92BEE7655E2D /* LibSSH2Bridge.h */,
+			);
+			name = Services;
+			path = Services;
+			sourceTree = "<group>";
+		};
+		51AD3DC3E7EAF0796052CE6E = {
+			isa = PBXGroup;
+			children = (
+				329D805775AC53C9AC8ADE8A /* Products */,
+				61AE85E5E49C7CCB79BE241B /* Frameworks */,
+				2891DFCFB052DBBE7785BE50 /* macfuseGui */,
+				7897B60AB4FD863491457965 /* macfuseGuiTests */,
+			);
+			sourceTree = "<group>";
+		};
+		5F42CFBBF5F9C31DCCCDC60D /* OS X */ = {
+			isa = PBXGroup;
+			children = (
+				5333BB89C1E9FAC18A830BE0 /* Cocoa.framework */,
+			);
+			name = "OS X";
+			sourceTree = "<group>";
+		};
+		61AE85E5E49C7CCB79BE241B /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				5F42CFBBF5F9C31DCCCDC60D /* OS X */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		72C8A9687AD241FE4F854955 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				F6FB986B4AC914C9EF18E4E2 /* RemoteBrowserViewModel.swift */,
+				FB018E9A50CDE2EE47C1DAFB /* RemoteEditorViewModel.swift */,
+				CB35A7160C828EC1AA4DF0A3 /* RemotesViewModel.swift */,
+			);
+			name = ViewModels;
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		7897B60AB4FD863491457965 /* macfuseGuiTests */ = {
+			isa = PBXGroup;
+			children = (
+				BDC2BE588D03C7E5B66BEBBE /* KeychainServiceTests.swift */,
+				CA1CEF0B82125E597B943366 /* MountArgBuilderTests.swift */,
+				62E8919B0F450B3D28E534FE /* MountStateParserTests.swift */,
+				B2D4F6081A3C5E7F9B1D3F5B /* ProcessRunnerTests.swift */,
+				E0005112E3D4EDABBAF4A9D7 /* RemoteDirectoryParserTests.swift */,
+				06148311183BDBFC0D84CE6B /* RemoteStoreTests.swift */,
+				DC599F0E6383A858F6D90A7B /* RemotesViewModelHelpersTests.swift */,
+				36C50FBC2DF7C3C520F9D2E3 /* UnmountServiceTests.swift */,
+				C39D6153CFB9FB2C9B7A13D9 /* ValidationServiceTests.swift */,
+			);
+			name = macfuseGuiTests;
+			path = macfuseGuiTests;
+			sourceTree = "<group>";
+		};
+		CE3E4AFDD94688E59BA11A29 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				C5C3E3B9C41A26A4B3756212 /* AppError.swift */,
+				371B5AC84818F7618819D2A8 /* BrowserConnectionHealth.swift */,
+				A05E9274C616A1D6999000F5 /* MountRecord.swift */,
+				FB6DB87BF922E1AFEAE71549 /* RemoteAuth.swift */,
+				CE172C849059518AB43E41B5 /* RemoteConfig.swift */,
+				3E459D411DBB2F03947805CA /* RemoteStatus.swift */,
+			);
+			name = Models;
+			path = Models;
+			sourceTree = "<group>";
+		};
+		E8E8D95A47FE199E3ACD3981 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				976EB96BF9E5A1C8D50860B3 /* Assets.xcassets */,
+				87DAF630CAB61DDD67C4626B /* Info.plist */,
+			);
+			name = Resources;
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		925F0C8672D220E3216BD140 /* macfuseGui */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A67EFEE15BC1CF98FC639FC3 /* Build configuration list for PBXNativeTarget "macfuseGui" */;
+			buildPhases = (
+				D7473E5B66AD47221C78DA2A /* Sources */,
+				B8D28B6D16EF94B2B6E8FF91 /* Frameworks */,
+				C201671A77D77352133A40E5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = macfuseGui;
+			productName = macfuseGui;
+			productReference = 7EB79520054BBFFA2D15AA3D /* macfuseGui.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D5F59933F816F7E608DDABA4 /* macfuseGuiTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C9C145B7EED9E1CFC24104F9 /* Build configuration list for PBXNativeTarget "macfuseGuiTests" */;
+			buildPhases = (
+				CF1849475A0EA166D03287F7 /* Sources */,
+				296EFA2AAC40550B74513979 /* Frameworks */,
+				08892C649DF2ECC0382AE297 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4DD8F42DC2F443ACD2DA8EEA /* PBXTargetDependency */,
+			);
+			name = macfuseGuiTests;
+			productName = macfuseGuiTests;
+			productReference = D19C302D84E4D664F6877F76 /* macfuseGuiTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D9DDA56017440A92738C8CFE /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 63C6393D25A67331D7702351 /* Build configuration list for PBXProject "macfuseGui" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 51AD3DC3E7EAF0796052CE6E;
+			minimizedProjectReferenceProxies = 0;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 329D805775AC53C9AC8ADE8A /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				925F0C8672D220E3216BD140 /* macfuseGui */,
+				D5F59933F816F7E608DDABA4 /* macfuseGuiTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		08892C649DF2ECC0382AE297 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C201671A77D77352133A40E5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1C3944B08AAB503DAB4380E1 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		CF1849475A0EA166D03287F7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				424336D6132B83926F3E3AA5 /* KeychainServiceTests.swift in Sources */,
+				9BF77D70B94A2397034BF606 /* MountArgBuilderTests.swift in Sources */,
+				5D8518327271BCFD0F9C51D4 /* MountStateParserTests.swift in Sources */,
+				A1C3E5F7092B4D6F8A0C2E4A /* ProcessRunnerTests.swift in Sources */,
+				7ADAD9C1FD8FEA7F21F18A0E /* RemoteDirectoryParserTests.swift in Sources */,
+				FAB35C574ABD1A056E4A99A8 /* RemoteStoreTests.swift in Sources */,
+				DC9AA73836082601A65FC04A /* RemotesViewModelHelpersTests.swift in Sources */,
+				E657E9F6C0A3373CD7B29B31 /* UnmountServiceTests.swift in Sources */,
+				9BD3D961E7654A29636A1EBC /* ValidationServiceTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D7473E5B66AD47221C78DA2A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				39B616918869CCCCD2B7DD83 /* AppDelegate.swift in Sources */,
+				B8C805F60A25132645BF0868 /* AppEnvironment.swift in Sources */,
+				883394C334D4AF8AB841FBD7 /* SettingsWindowController.swift in Sources */,
+				68FE10FA44D00152E0BB61FB /* macfuseGuiApp.swift in Sources */,
+				AE2E6207DCB2A8676E70F39E /* MenuBarController.swift in Sources */,
+				10C10B21DCDEC2AD88223A8E /* AppError.swift in Sources */,
+				149E572890F1AB3C2ED44EAA /* BrowserConnectionHealth.swift in Sources */,
+				137F4DB2EF0C3B99EAFE6F75 /* MountRecord.swift in Sources */,
+				D2AFF0BE1B0446CEE2AE0595 /* RemoteAuth.swift in Sources */,
+				37D24383F66D11BE62644D6A /* RemoteConfig.swift in Sources */,
+				DD76347C4BBFDF22B470F871 /* RemoteStatus.swift in Sources */,
+				BAE25CD86EEE27E08AA86AA7 /* AskpassHelper.swift in Sources */,
+				416FEA583FF4FA070007042C /* BrowserPathNormalizer.swift in Sources */,
+				268CCDDF373D9C59FBB4B026 /* LibSSH2Bridge.c in Sources */,
+				BAF96CCFF550B74EF7D56722 /* LibSSH2SFTPTransport.swift in Sources */,
+				9F340F05EAA5F5D44B6187B2 /* LibSSH2SessionActor.swift in Sources */,
+				52E9E3C610DF483B3A06A980 /* RemoteBrowserSessionManager.swift in Sources */,
+				73DA5932FEE9C129AA1280F7 /* SFTPDirectoryParser.swift in Sources */,
+				AF3682692F0C4028511D5C30 /* DependencyChecker.swift in Sources */,
+				2A046DE8D98F318CF458C9FF /* DiagnosticsService.swift in Sources */,
+				103A7C95077E922349BC6533 /* KeychainService.swift in Sources */,
+				CF60BFAF2681BD9F8E86E8EB /* MountCommandBuilder.swift in Sources */,
+				B3ECAB6B9206097A103F8D5A /* MountManager.swift in Sources */,
+				2335A002D328BC9D1DA35F36 /* MountStateParser.swift in Sources */,
+				0954232ABBBE1E79AD928C08 /* ProcessRunner.swift in Sources */,
+				BA3142C836207CF9B8BE61AC /* RedactionService.swift in Sources */,
+				7B5B776AE8B25B3E81E2F97C /* RemoteDirectoryBrowserService.swift in Sources */,
+				B9B9DD53B672CCF3B2442B37 /* RemoteStore.swift in Sources */,
+				F93DDB9D2D08ACEA0EDEBD5D /* UnmountService.swift in Sources */,
+				DAE18CD23835CC632F50111F /* ValidationService.swift in Sources */,
+				ED4E67F8CBE6DCEBB00FFFF5 /* RemoteBrowserViewModel.swift in Sources */,
+				4F7DB607B3635F7C61DF04FE /* RemoteEditorViewModel.swift in Sources */,
+				C8BD663B6D66F153BD044241 /* RemotesViewModel.swift in Sources */,
+				E4F86048F3B59B6F34ED5D36 /* RemoteBrowserView.swift in Sources */,
+				97604450C7067129182F2289 /* RemoteEditorView.swift in Sources */,
+				991BBF1365696767B7005FF9 /* RemotesListView.swift in Sources */,
+				6A706AFCFCCBD66A6136C911 /* SettingsRootView.swift in Sources */,
+				CAD195A6835E99871A2E8DFA /* StatusBadgeView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		4DD8F42DC2F443ACD2DA8EEA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = macfuseGui;
+			target = 925F0C8672D220E3216BD140 /* macfuseGui */;
+			targetProxy = 6E72E4532ADE7442FDB94C1D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		73B56A83BA66B4D6634F8114 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @loader_path/../Frameworks @executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.visualweb.macfusegui.tests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/macfuseGui.app/Contents/MacOS/macfuseGui";
+			};
+			name = Release;
+		};
+		A17E8AD6BADB2C0EFCE537BE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		B7078F05C51792E8711ABCCD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				COMBINE_HIDPI_IMAGES = YES;
+				EXTRACT_APP_INTENTS_METADATA = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/macfuseGui/Services/Browser",
+					"$(SRCROOT)/build/third_party/libssh2/include",
+				);
+				INFOPLIST_FILE = macfuseGui/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/build/third_party/libssh2/lib",
+					"$(SRCROOT)/build/third_party/openssl/lib",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lssh2",
+					"-lcrypto",
+					"-lz",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.visualweb.macfusegui;
+				PRODUCT_NAME = macfuseGui;
+				SDKROOT = macosx;
+				SWIFT_OBJC_BRIDGING_HEADER = "macfuseGui/Resources/macfuseGui-Bridging-Header.h";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		BE767B59EFBBB8D3FE629DBD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		DC8B085C42AF70DFF8DB547D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @loader_path/../Frameworks @executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.visualweb.macfusegui.tests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/macfuseGui.app/Contents/MacOS/macfuseGui";
+			};
+			name = Debug;
+		};
+		ECF768F524A8A2EB413853FF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				COMBINE_HIDPI_IMAGES = YES;
+				EXTRACT_APP_INTENTS_METADATA = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/macfuseGui/Services/Browser",
+					"$(SRCROOT)/build/third_party/libssh2/include",
+				);
+				INFOPLIST_FILE = macfuseGui/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/build/third_party/libssh2/lib",
+					"$(SRCROOT)/build/third_party/openssl/lib",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lssh2",
+					"-lcrypto",
+					"-lz",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.visualweb.macfusegui;
+				PRODUCT_NAME = macfuseGui;
+				SDKROOT = macosx;
+				SWIFT_OBJC_BRIDGING_HEADER = "macfuseGui/Resources/macfuseGui-Bridging-Header.h";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		63C6393D25A67331D7702351 /* Build configuration list for PBXProject "macfuseGui" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BE767B59EFBBB8D3FE629DBD /* Debug */,
+				A17E8AD6BADB2C0EFCE537BE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A67EFEE15BC1CF98FC639FC3 /* Build configuration list for PBXNativeTarget "macfuseGui" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ECF768F524A8A2EB413853FF /* Release */,
+				B7078F05C51792E8711ABCCD /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C9C145B7EED9E1CFC24104F9 /* Build configuration list for PBXNativeTarget "macfuseGuiTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				73B56A83BA66B4D6634F8114 /* Release */,
+				DC8B085C42AF70DFF8DB547D /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = D9DDA56017440A92738C8CFE /* Project object */;
+}

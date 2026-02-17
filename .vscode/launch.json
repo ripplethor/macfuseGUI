@@ -1,0 +1,65 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug macfuseGui",
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:macfuseGui}",
+      "preLaunchTask": "swift: Build Debug macfuseGui",
+      "target": "macfuseGui",
+      "configuration": "debug"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:macfuseGui}/build/DerivedData",
+      "name": "Debug macfuseGui (build/DerivedData)",
+      "target": "macfuseGui",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug macfuseGui (build/DerivedData)"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:macfuseGui}/build/DerivedData",
+      "name": "Release macfuseGui (build/DerivedData)",
+      "target": "macfuseGui",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release macfuseGui (build/DerivedData)"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:macfuseGui}/build/DerivedData/Logs",
+      "name": "Debug macfuseGui (build/DerivedData/Logs)",
+      "target": "macfuseGui",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug macfuseGui (build/DerivedData/Logs)"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:macfuseGui}/build/DerivedData/Logs",
+      "name": "Release macfuseGui (build/DerivedData/Logs)",
+      "target": "macfuseGui",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release macfuseGui (build/DerivedData/Logs)"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:macfuseGui}",
+      "name": "Release macfuseGui",
+      "target": "macfuseGui",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release macfuseGui"
+    }
+  ]
+}

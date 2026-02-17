@@ -1,0 +1,39 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/build.sh",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [
+        "$swiftc"
+      ]
+    },
+    {
+      "label": "run",
+      "type": "shell",
+      "command": "SKIP_BUILD=1 ${workspaceFolder}/scripts/run.sh",
+      "dependsOn": [
+        "build"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "clean",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/clean.sh",
+      "problemMatcher": []
+    },
+    {
+      "label": "sourcekit-reset-cache",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/reset_sourcekit_cache.sh",
+      "problemMatcher": []
+    }
+  ]
+}
