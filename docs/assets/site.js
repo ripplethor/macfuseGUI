@@ -134,9 +134,9 @@ function setupScrollObserver() {
 
     const observerOptions = {
         root: null,
-        // Reveal slightly before elements fully enter the viewport.
-        rootMargin: '0px 0px 18% 0px',
-        threshold: 0.01
+        // Reveal just before entering viewport to feel responsive.
+        rootMargin: '0px 0px 12% 0px',
+        threshold: 0.03
     };
 
     const observer = new IntersectionObserver((entries, observer) => {
@@ -150,7 +150,7 @@ function setupScrollObserver() {
 
     hiddenElements.forEach((el) => {
         const rect = el.getBoundingClientRect();
-        if (rect.top < window.innerHeight * 0.98) {
+        if (rect.top < window.innerHeight * 0.82) {
             el.classList.add('reveal-visible');
             return;
         }

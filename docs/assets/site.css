@@ -488,11 +488,13 @@ body {
 /* Scroll Reveal */
 .reveal-on-scroll {
     opacity: 0;
-    transform: translate3d(0, 18px, 0);
-    transition-property: opacity, transform;
-    transition-duration: 560ms;
-    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-    will-change: opacity, transform;
+    transform: translate3d(0, 28px, 0) scale(0.985);
+    filter: blur(6px);
+    transition:
+        opacity 520ms cubic-bezier(0.22, 1, 0.36, 1),
+        transform 760ms cubic-bezier(0.16, 1, 0.3, 1),
+        filter 760ms cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform, filter;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -507,24 +509,26 @@ body {
         transition: none;
         opacity: 1;
         transform: none;
+        filter: none;
     }
 }
 
 .reveal-visible {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
 }
 
 .delay-100 {
-    transition-delay: 60ms;
+    transition-delay: 80ms;
 }
 
 .delay-200 {
-    transition-delay: 120ms;
+    transition-delay: 160ms;
 }
 
 .delay-300 {
-    transition-delay: 180ms;
+    transition-delay: 240ms;
 }
 
 /* Focus Accessibility */
