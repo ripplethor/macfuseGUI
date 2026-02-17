@@ -416,9 +416,11 @@ struct EditorPluginSettingsView: View {
                 Text("Installed Plugins")
                     .font(.subheadline.weight(.semibold))
                 Spacer()
-                Text("Star sets preferred")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                if activeEditorPlugins.count > 1 {
+                    Text("Star sets preferred")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             if editorPluginRegistry.plugins.isEmpty {
@@ -462,23 +464,29 @@ struct EditorPluginSettingsView: View {
         VStack(alignment: .leading, spacing: 10) {
             pluginControlCard(
                 title: "Primary Action",
-                subtitle: "Menu bar opens preferred editor first, then falls back across active plugins."
+                subtitle: primaryActionSubtitle
             ) {
-                Picker("Preferred Editor", selection: preferredPluginBinding) {
-                    if activeEditorPlugins.isEmpty {
-                        Text("No active plugins")
-                            .tag("")
-                    } else {
+                if activeEditorPlugins.isEmpty {
+                    Button("No active plugins") {}
+                        .buttonStyle(.bordered)
+                        .disabled(true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if activeEditorPlugins.count == 1, let plugin = activeEditorPlugins.first {
+                    Button("Preferred: \(plugin.displayName)") {}
+                        .buttonStyle(.bordered)
+                        .disabled(true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    Picker("Preferred Editor", selection: preferredPluginBinding) {
                         ForEach(activeEditorPlugins) { plugin in
                             Text(plugin.displayName)
                                 .tag(plugin.id)
                         }
                     }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .disabled(activeEditorPlugins.isEmpty)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             pluginControlCard(
@@ -677,6 +685,7 @@ struct EditorPluginSettingsView: View {
     @ViewBuilder
     private func pluginRow(_ plugin: EditorPluginDefinition) -> some View {
         let isSelected = selectedPluginID == plugin.id
+        let canChoosePreferred = activeEditorPlugins.count > 1
 
         HStack(spacing: 10) {
             ZStack {
@@ -693,7 +702,7 @@ struct EditorPluginSettingsView: View {
                     Text(plugin.displayName)
                         .font(.callout.weight(.semibold))
                     pluginSourceBadge(plugin.source)
-                    if plugin.isPreferred {
+                    if canChoosePreferred, plugin.isPreferred {
                         pluginTag(text: "Preferred", tint: .blue)
                     }
                 }
@@ -736,15 +745,17 @@ struct EditorPluginSettingsView: View {
                         .help("Remove external plugin")
                     }
 
-                    Button {
-                        editorPluginRegistry.setPreferredPlugin(plugin.id)
-                    } label: {
-                        Image(systemName: plugin.isPreferred ? "star.fill" : "star")
-                            .foregroundStyle(plugin.isPreferred ? .yellow : .secondary)
+                    if canChoosePreferred {
+                        Button {
+                            editorPluginRegistry.setPreferredPlugin(plugin.id)
+                        } label: {
+                            Image(systemName: plugin.isPreferred ? "star.fill" : "star")
+                                .foregroundStyle(plugin.isPreferred ? .yellow : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!plugin.isActive)
+                        .help(plugin.isActive ? "Set as preferred editor" : "Enable plugin to set as preferred")
                     }
-                    .buttonStyle(.plain)
-                    .disabled(!plugin.isActive)
-                    .help(plugin.isActive ? "Set as preferred editor" : "Enable plugin to set as preferred")
 
                     Toggle("", isOn: pluginActiveBinding(pluginID: plugin.id))
                         .toggleStyle(.switch)
@@ -817,6 +828,17 @@ struct EditorPluginSettingsView: View {
 
     private var activeEditorPlugins: [EditorPluginDefinition] {
         editorPluginRegistry.activePluginsInPriorityOrder()
+    }
+
+    private var primaryActionSubtitle: String {
+        switch activeEditorPlugins.count {
+        case 0:
+            return "Enable at least one plugin to use Open In."
+        case 1:
+            return "A single active plugin is used directly."
+        default:
+            return "Menu bar opens preferred editor first, then falls back across active plugins."
+        }
     }
 
     private var selectedPlugin: EditorPluginDefinition? {

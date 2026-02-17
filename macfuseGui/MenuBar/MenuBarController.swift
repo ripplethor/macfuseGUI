@@ -734,6 +734,12 @@ private struct MenuPopoverContentView: View {
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 private struct RemotePopoverRow: View {
+    private enum OpenEditorPresentationMode {
+        case none
+        case single
+        case picker
+    }
+
     let remote: RemoteConfig
     let status: RemoteStatus
     let badgeStateRawValue: String
@@ -743,6 +749,21 @@ private struct RemotePopoverRow: View {
     let onDisconnect: () -> Void
     let onOpenInPreferredEditor: () -> Void
     let onOpenInEditorPlugin: (String) -> Void
+
+    private var openEditorPresentationMode: OpenEditorPresentationMode {
+        switch activeEditorPlugins.count {
+        case 0:
+            return .none
+        case 1:
+            return .single
+        default:
+            return .picker
+        }
+    }
+
+    private var singleEditorDisplayName: String {
+        activeEditorPlugins.first?.displayName ?? preferredPluginDisplayName
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -779,20 +800,24 @@ private struct RemotePopoverRow: View {
                     .disabled(!canConnect)
                 Button("Disconnect", action: onDisconnect)
                     .disabled(!canDisconnect)
-                Button("Open in \(preferredPluginDisplayName)", action: onOpenInPreferredEditor)
-                    .disabled(status.state != .connected || activeEditorPlugins.isEmpty)
-                Menu("Open In…") {
-                    if activeEditorPlugins.isEmpty {
-                        Text("No active editor plugins")
-                    } else {
+
+                switch openEditorPresentationMode {
+                case .none:
+                    Button("Open in Editor") {}
+                        .disabled(true)
+                case .single:
+                    Button("Open in \(singleEditorDisplayName)", action: onOpenInPreferredEditor)
+                        .disabled(status.state != .connected)
+                case .picker:
+                    Menu("Open In…") {
                         ForEach(activeEditorPlugins) { plugin in
                             Button(plugin.displayName) {
                                 onOpenInEditorPlugin(plugin.id)
                             }
                         }
                     }
+                    .disabled(status.state != .connected)
                 }
-                .disabled(status.state != .connected || activeEditorPlugins.isEmpty)
                 Spacer()
             }
         }

@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en" class="antialiased scroll-smooth">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>macfuseGui - Elegant SSHFS Management for macOS</title>
+    <meta name="description"
+        content="A premium, native-feeling macOS menu bar app for managing SSHFS mounts. Secure, reliable, and designed for Apple Silicon.">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://ripplethor.github.io/macfuseGui/">
+    <meta property="og:title" content="macfuseGui - Elegant SSHFS for macOS">
+    <meta property="og:description"
+        content="Secure, reliable remote filesystem mounting. Built for Apple Silicon. Manage multiple connections with a native menu bar experience.">
+    <!-- <meta property="og:image" content="https://ripplethor.github.io/macfuseGui/assets/og-image.png"> -->
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://ripplethor.github.io/macfuseGui/">
+    <meta property="twitter:title" content="macfuseGui - Elegant SSHFS for macOS">
+    <meta property="twitter:description"
+        content="Secure, reliable remote filesystem mounting. Built for Apple Silicon.">
+    <!-- <meta property="twitter:image" content="https://ripplethor.github.io/macfuseGui/assets/og-image.png"> -->
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "macfuseGui",
+      "operatingSystem": "macOS",
+      "applicationCategory": "UtilitiesApplication",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "description": "A native macOS menu bar app for managing SSHFS mounts with ease."
+    }
+    </script>
+
+    <!-- Inline Theme Script (Prevent Flash) -->
+    <script>
+        (function () {
+            try {
+                const saved = localStorage.getItem('theme');
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                // Only force if explicit
+                if (saved === 'dark') {
+                    document.documentElement.classList.add('dark');
+                } else if (saved === 'light') {
+                    document.documentElement.classList.remove('dark');
+                } else if (prefersDark) {
+                    document.documentElement.classList.add('dark');
+                }
+            } catch (e) { }
+        })();
+    </script>
+
+    <!-- Tailwind v4 via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#60a5fa',
+                            500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a',
+                        }
+                    },
+                    letterSpacing: {
+                        tighter: '-0.04em',
+                        tight: '-0.02em',
+                        normal: '0',
+                        wide: '0.02em',
+                        wider: '0.04em',
+                        widest: '0.08em',
+                    },
+                    animation: {
+                        'gradient-text': 'gradient-text 8s ease infinite',
+                        'shimmer': 'shimmer 1.5s infinite',
+                    },
+                    keyframes: {
+                        'gradient-text': {
+                            '0%, 100%': { 'background-position': '0% 50%' },
+                            '50%': { 'background-position': '100% 50%' },
+                        },
+                        'shimmer': {
+                            '0%': { 'transform': 'translateX(-100%)' },
+                            '100%': { 'transform': 'translateX(100%)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="assets/site.css">
+
+    <!-- Site Logic -->
+    <script src="assets/site.js" defer></script>
+</head>
+
+<body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors duration-500 ease-in-out">
+
+    <!-- Nebula Background -->
+    <div class="space-canvas fixed inset-0 z-0 pointer-events-none" aria-hidden="true">
+        <div class="space-gradient"></div>
+        <div class="nebula-cloud nebula-cloud-a"></div>
+        <div class="nebula-cloud nebula-cloud-b"></div>
+        <div class="nebula-cloud nebula-cloud-c"></div>
+        <div class="nebula-cloud nebula-cloud-d"></div>
+        <div class="space-dust"></div>
+        <div class="starfield starfield-far"></div>
+        <div class="starfield starfield-mid"></div>
+        <div class="starfield starfield-near"></div>
+        <div class="starfield star-glints"></div>
+        <div class="space-vignette"></div>
+    </div>
+
+    <!-- Header -->
+    <header class="sticky top-0 z-50 glass-panel border-b border-white/10 transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-20">
+                <!-- Logo -->
+                <div class="flex items-center space-x-3 group cursor-default">
+                    <div
+                        class="relative w-8 h-8 flex items-center justify-center bg-gray-900 rounded-lg border border-white/20 shadow-lg group-hover:scale-110 transition-transform duration-300 overflow-hidden">
+                        <div class="absolute inset-0 bg-gradient-to-tr from-blue-600 to-purple-600 opacity-50"></div>
+                        <svg class="w-5 h-5 text-white relative z-10" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                        </svg>
+                    </div>
+                    <span class="font-bold text-xl tracking-tight text-gray-900 dark:text-white">macfuse<span
+                            class="text-blue-600 dark:text-blue-400">Gui</span></span>
+                </div>
+
+                <!-- Nav -->
+                <nav class="hidden md:flex space-x-8 text-sm font-medium text-gray-600 dark:text-gray-300">
+                    <a href="#features"
+                        class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200">Features</a>
+                    <a href="#install"
+                        class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200">Install</a>
+
+                    <a href="#faq"
+                        class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200">FAQ</a>
+                </nav>
+
+                <!-- Theme Toggle -->
+                <button id="theme-toggle"
+                    class="p-2 rounded-full hover:bg-gray-200/50 dark:hover:bg-gray-800/50 transition-all duration-300 focus:ring-2 focus:ring-blue-500 focus:outline-none backdrop-blur-sm text-gray-600 dark:text-gray-300"
+                    aria-label="Toggle Theme">
+                    <span id="theme-toggle-label" class="sr-only">Switch to Dark Mode</span>
+                    <!-- Sun Icon -->
+                    <svg class="w-5 h-5 hidden dark:block text-yellow-400 transition-transform hover:rotate-90"
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                    <!-- Moon Icon -->
+                    <svg class="w-5 h-5 block dark:hidden text-gray-600 transition-transform hover:-rotate-12"
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="relative z-10">
+        <!-- Hero Section -->
+        <section class="pt-24 pb-32 sm:pt-32 sm:pb-40 overflow-hidden">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                <div class="reveal-on-scroll">
+                    <h1
+                        class="text-6xl sm:text-8xl font-black tracking-tighter text-gray-900 dark:text-white mb-6 leading-none">
+                        Open Source GUI <br />
+                        <span
+                            class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600 animate-gradient-text">for
+                            macFUSE.</span>
+                    </h1>
+                    <p
+                        class="mt-6 max-w-2xl mx-auto text-xl sm:text-2xl text-gray-600 dark:text-gray-300 mb-12 font-medium leading-relaxed">
+                        Stop typing <code
+                            class="bg-gray-200 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono text-blue-600 dark:text-blue-400">mount</code>
+                        commands. <br class="hidden sm:block" />
+                        Secure, native SSHFS management for macOS.
+                    </p>
+
+                    <div class="mt-10 flex justify-center gap-4 mb-20">
+                        <a href="#download"
+                            class="px-8 py-4 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg shadow-[0_0_20px_rgba(37,99,235,0.5)] hover:shadow-[0_0_30px_rgba(37,99,235,0.6)] transition-all duration-300 flex items-center group">
+                            <svg class="w-6 h-6 mr-2 group-hover:animate-bounce" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            <span class="relative">
+                                Download DMG
+                            </span>
+                        </a>
+                        <a id="github-btn" href="#"
+                            class="px-8 py-4 rounded-full glass-panel text-gray-900 dark:text-white font-semibold text-lg hover:bg-white/40 dark:hover:bg-gray-800/60 transition-all duration-300 flex items-center border border-gray-200 dark:border-white/10">
+                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                <path fill-rule="evenodd"
+                                    d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            View Source
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Product Visualization (Desktop Scene) -->
+                <div class="reveal-on-scroll delay-200 relative max-w-5xl mx-auto perspective-1000">
+                    <div
+                        class="relative w-full h-[600px] bg-gray-900 rounded-xl overflow-hidden shadow-2xl border border-gray-700 bg-[url('https://images.unsplash.com/photo-1477346611705-65d1883cee1e?auto=format&fit=crop&q=80')] bg-cover bg-center">
+                        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+
+                        <!-- 1. Menu Bar -->
+                        <div
+                            class="absolute top-0 w-full h-8 bg-black/40 backdrop-blur-md flex justify-between items-center px-4 z-50 text-white text-xs font-medium border-b border-white/5">
+                            <div class="flex items-center space-x-4">
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                    <path
+                                        d="M12 17.27L18.18 21L16.54 13.97L22 9.24L14.81 8.63L12 2L9.19 8.63L2 9.24L7.46 13.97L5.82 21L12 17.27Z" />
+                                </svg>
+                                <span class="hidden sm:inline opacity-80">File</span>
+                                <span class="hidden sm:inline opacity-80">Edit</span>
+                                <span class="hidden sm:inline opacity-80">View</span>
+                                <span class="hidden sm:inline opacity-80">Window</span>
+                                <span class="hidden sm:inline opacity-80">Help</span>
+                            </div>
+                            <div class="flex items-center space-x-4">
+                                <!-- Status Icons -->
+                                <svg class="w-4 h-4 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                                </svg>
+                                <span class="opacity-80">14:02</span>
+                                <!-- App Icon Active -->
+                                <div
+                                    class="w-6 h-6 bg-blue-500/20 rounded flex items-center justify-center border border-blue-500/40 relative">
+                                    <svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                    </svg>
+                                    <div class="absolute -bottom-1 w-1 h-1 bg-white rounded-full"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. The App Window (Popped out from icon) -->
+                        <div
+                            class="absolute top-12 right-12 w-[400px] z-50 transform transition-all duration-700 hover:scale-[1.02] shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+                            <div class="bg-[#1e1e1e] rounded-xl border border-gray-700/50 overflow-hidden text-left">
+                                <!-- App Header -->
+                                <div
+                                    class="bg-[#252526] px-4 py-3 border-b border-black/20 flex justify-between items-center">
+                                    <div class="text-white font-bold text-sm tracking-tight flex items-center"><span
+                                            class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>macfuseGui</div>
+                                    <div class="text-[10px] text-gray-500 font-mono">v2.1.0</div>
+                                </div>
+                                <!-- App List -->
+                                <div class="p-3 space-y-3">
+                                    <div
+                                        class="bg-[#2d2d2d] rounded-lg p-3 border border-white/5 relative group hover:bg-[#333]">
+                                        <div class="flex justify-between items-start mb-1">
+                                            <h3 class="text-white font-bold text-xs">Production DB</h3>
+                                            <span
+                                                class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-green-500/20 text-green-400 border border-green-500/20">Connected</span>
+                                        </div>
+                                        <div class="text-[10px] text-gray-400 font-mono mb-2">
+                                            root@10.0.0.5 <span class="opacity-50">/mnt/prod</span>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button
+                                                class="px-2 py-1 bg-[#3a3a3a] text-xs text-gray-500 rounded cursor-not-allowed">Connect</button>
+                                            <button
+                                                class="px-2 py-1 bg-red-900/20 text-xs text-red-400 border border-red-500/20 rounded hover:bg-red-900/30">Disconnect</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="bg-[#2d2d2d] rounded-lg p-3 border border-white/5 relative opacity-60">
+                                        <div class="flex justify-between items-start mb-1">
+                                            <h3 class="text-white font-bold text-xs">Staging Assets</h3>
+                                            <span
+                                                class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-gray-500/20 text-gray-400 border border-gray-500/20">Offline</span>
+                                        </div>
+                                        <div class="text-[10px] text-gray-400 font-mono mb-2">
+                                            media@192.168.1.50
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button
+                                                class="px-2 py-1 bg-blue-600 text-xs text-white rounded hover:bg-blue-500 shadow-sm">Connect</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. VS Code Window (Center Stage) -->
+                        <div
+                            class="absolute top-32 left-8 md:object-center md:left-20 w-[90%] md:w-[680px] h-[400px] z-40 shadow-2xl rounded-lg overflow-hidden border border-gray-700 bg-[#1e1e1e] flex flex-col transform transition-all duration-1000 translate-y-4 hover:translate-y-0 text-left">
+                            <!-- VS Code Title Bar -->
+                            <div
+                                class="h-8 bg-[#3c3c3c] flex items-center justify-center relative border-b border-black/20 shrink-0">
+                                <div class="absolute left-3 flex space-x-2">
+                                    <div class="w-3 h-3 rounded-full bg-[#FF5F57]"></div>
+                                    <div class="w-3 h-3 rounded-full bg-[#FEBC2E]"></div>
+                                    <div class="w-3 h-3 rounded-full bg-[#28C840]"></div>
+                                </div>
+                                <span class="text-gray-400 text-xs font-medium">index.ts — macfuseGui — Visual
+                                    Studio Code</span>
+                            </div>
+
+                            <!-- VS Code Body -->
+                            <div class="flex flex-1 overflow-hidden">
+                                <!-- Activity Bar -->
+                                <div
+                                    class="w-12 bg-[#333333] flex flex-col items-center py-4 space-y-4 border-r border-black/20 shrink-0">
+                                    <!-- Files Icon -->
+                                    <svg class="w-6 h-6 text-white opacity-90 border-l-2 border-white pl-1" fill="none"
+                                        viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <svg class="w-6 h-6 text-gray-500 hover:text-white" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                    <svg class="w-6 h-6 text-gray-500 hover:text-white" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                    </svg>
+                                </div>
+
+                                <!-- Sidebar -->
+                                <div
+                                    class="w-48 bg-[#252526] text-gray-400 text-xs p-2 hidden sm:block font-sans border-r border-black/20 shrink-0">
+                                    <div class="uppercase text-[10px] font-bold mb-2 tracking-wider pl-2">Explorer
+                                    </div>
+                                    <div class="pl-2 mb-1 flex items-center font-bold text-gray-300">
+                                        <svg class="w-3 h-3 mr-1 transform rotate-90" fill="currentColor"
+                                            viewBox="0 0 20 20">
+                                            <path d="M5 10l10-10v20z" />
+                                        </svg>
+                                        MACFUSE-GUI
+                                    </div>
+                                    <div class="pl-6 space-y-1">
+                                        <div
+                                            class="flex items-center text-blue-400 hover:bg-[#37373d] px-1 py-0.5 rounded cursor-pointer">
+                                            <span class="mr-1.5 text-yellow-400">TS</span> index.ts
+                                        </div>
+                                        <div
+                                            class="flex items-center hover:bg-[#37373d] px-1 py-0.5 rounded cursor-pointer">
+                                            <span class="mr-1.5 text-purple-400">JSON</span> package.json
+                                        </div>
+                                        <div
+                                            class="flex items-center hover:bg-[#37373d] px-1 py-0.5 rounded cursor-pointer">
+                                            <span class="mr-1.5 text-gray-400">#</span> README.md
+                                        </div>
+                                    </div>
+
+                                    <div class="uppercase text-[10px] font-bold mt-4 mb-2 tracking-wider pl-2">
+                                        MOUNTS</div>
+                                    <div class="pl-2 mb-1 flex items-center text-green-400 font-bold">
+                                        <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                                        </svg>
+                                        prod_cluster
+                                    </div>
+                                    <div class="pl-6 space-y-1 opacity-80">
+                                        <div
+                                            class="flex items-center hover:bg-[#37373d] px-1 py-0.5 rounded cursor-pointer">
+                                            <span class="mr-1.5 text-yellow-400">DB</span> users.sql
+                                        </div>
+                                        <div
+                                            class="flex items-center hover:bg-[#37373d] px-1 py-0.5 rounded cursor-pointer">
+                                            <span class="mr-1.5 text-blue-300">LOG</span> error.log
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Editor -->
+                                <div
+                                    class="flex-1 bg-[#1e1e1e] font-mono text-sm relative overflow-hidden flex flex-col">
+                                    <!-- Tabs -->
+                                    <div
+                                        class="h-9 bg-[#2d2d2d] flex items-center text-xs border-b border-black/20 shrink-0">
+                                        <div
+                                            class="px-4 h-full bg-[#1e1e1e] flex items-center border-t-2 border-blue-500 text-white">
+                                            <span class="mr-2 text-yellow-500">TS</span> index.ts
+                                            <svg class="w-3 h-3 ml-2 text-gray-500 hover:text-white" fill="none"
+                                                viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </div>
+                                    </div>
+
+                                    <!-- Code Content -->
+                                    <div class="flex-1 p-4 overflow-auto">
+                                        <pre class="font-mono text-[13px] leading-relaxed text-gray-300">
+<span class="text-gray-600 select-none mr-4"> 1</span><span class="text-pink-400">import</span> { <span class="text-yellow-300">FileSystem</span>, <span class="text-yellow-300">MountOptions</span> } <span class="text-pink-400">from</span> <span class="text-green-400">'@macfuse/core'</span>;
+<span class="text-gray-600 select-none mr-4"> 2</span>
+<span class="text-gray-600 select-none mr-4"> 3</span><span class="text-gray-500">// Initialize sophisticated handshake</span>
+<span class="text-gray-600 select-none mr-4"> 4</span><span class="text-pink-400">export class</span> <span class="text-yellow-300">ConnectionManager</span> {
+<span class="text-gray-600 select-none mr-4"> 5</span>    <span class="text-pink-400">private static</span> <span class="text-blue-400">async</span> <span class="text-yellow-300">initSecureTunnel</span>(<span class="text-blue-300">host</span>: <span class="text-green-400">string</span>) {
+<span class="text-gray-600 select-none mr-4"> 6</span>        <span class="text-pink-400">const</span> <span class="text-blue-300">latency</span> = <span class="text-pink-400">await</span> <span class="text-yellow-300">Network</span>.<span class="text-yellow-300">ping</span>(host);
+<span class="text-gray-600 select-none mr-4"> 7</span>        <span class="text-pink-400">if</span> (latency > <span class="text-green-400">50</span>) <span class="text-pink-400">throw new</span> <span class="text-yellow-300">Error</span>(<span class="text-green-400">'High latency detected'</span>);
+<span class="text-gray-600 select-none mr-4"> 8</span>        <span class="text-yellow-300">Logger</span>.<span class="text-yellow-300">info</span>(<span class="text-green-400">`Tunnel established: ${latency}ms`</span>);
+<span class="text-gray-600 select-none mr-4"> 9</span>    }
+<span class="text-gray-600 select-none mr-4">10</span>
+<span class="text-gray-600 select-none mr-4">11</span>    <span class="text-pink-400">public static async</span> <span class="text-yellow-300">mount</span>(<span class="text-blue-300">config</span>: <span class="text-yellow-300">MountOptions</span>): <span class="text-yellow-300">Promise</span><<span class="text-green-400">void</span>> {
+<span class="text-gray-600 select-none mr-4">12</span>        <span class="text-yellow-300">Logger</span>.<span class="text-yellow-300">info</span>(<span class="text-green-400">`Authenticating ${config.user}@${config.host}...`</span>);
+<span class="text-gray-600 select-none mr-4">13</span>        <span class="text-pink-400">await</span> <span class="text-blue-300">this</span>.<span class="text-yellow-300">initSecureTunnel</span>(config.<span class="text-blue-300">host</span>);
+<span class="text-gray-600 select-none mr-4">14</span>        <span class="text-pink-400">return</span> <span class="text-yellow-300">FileSystem</span>.<span class="text-yellow-300">attach</span>(config);<span class="animate-pulse w-2 h-4 bg-blue-400 inline-block ml-1 align-middle"></span>
+<span class="text-gray-600 select-none mr-4">15</span>    }
+<span class="text-gray-600 select-none mr-4">16</span>}</pre>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Status Bar -->
+                            <div
+                                class="h-6 bg-[#007acc] text-white flex items-center px-3 text-[10px] justify-between z-50 shrink-0">
+                                <div class="flex items-center space-x-3">
+                                    <div class="flex items-center"><svg class="w-3 h-3 mr-1" fill="none"
+                                            viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                        </svg> master*</div>
+                                    <div class="flex items-center"><svg class="w-3 h-3 mr-1" fill="none"
+                                            viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg> sshfs: connected</div>
+                                </div>
+                                <div class="flex items-center space-x-3">
+                                    <span>Ln 12, Col 48</span>
+                                    <span>UTF-8</span>
+                                    <span>TypeScript React</span>
+                                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+        </section>
+
+        <!-- Benefits Grid -->
+        <section
+            class="py-24 bg-white/30 dark:bg-gray-900/30 backdrop-blur-xl border-t border-b border-gray-100 dark:border-white/5">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-8 lg:gap-12">
+                    <!-- Benefit 1 -->
+                    <div class="reveal-on-scroll text-center p-4 group">
+                        <div
+                            class="w-16 h-16 mx-auto bg-blue-50 dark:bg-blue-900/20 rounded-2xl flex items-center justify-center mb-6 text-blue-600 dark:text-blue-400 shadow-sm group-hover:scale-110 transition-transform duration-300">
+                            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                    d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                        </div>
+                        <h3 class="font-bold text-lg text-gray-900 dark:text-white mb-2">Fast Setup</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">Add remotes in seconds with
+                            key-based or password auth.</p>
+                    </div>
+                    <!-- Benefit 2 -->
+                    <div class="reveal-on-scroll delay-100 text-center p-4 group">
+                        <div
+                            class="w-16 h-16 mx-auto bg-green-50 dark:bg-green-900/20 rounded-2xl flex items-center justify-center mb-6 text-green-600 dark:text-green-400 shadow-sm group-hover:scale-110 transition-transform duration-300">
+                            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <h3 class="font-bold text-lg text-gray-900 dark:text-white mb-2">Auto-Reconnect</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">Smart recovery after sleep,
+                            wake, and network changes.</p>
+                    </div>
+                    <!-- Benefit 3 -->
+                    <div class="reveal-on-scroll delay-200 text-center p-4 group">
+                        <div
+                            class="w-16 h-16 mx-auto bg-purple-50 dark:bg-purple-900/20 rounded-2xl flex items-center justify-center mb-6 text-purple-600 dark:text-purple-400 shadow-sm group-hover:scale-110 transition-transform duration-300">
+                            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                        </div>
+                        <h3 class="font-bold text-lg text-gray-900 dark:text-white mb-2">Secure</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">Passwords in Keychain.
+                            Config in plain JSON.</p>
+                    </div>
+                    <!-- Benefit 4 -->
+                    <div class="reveal-on-scroll delay-300 text-center p-4 group">
+                        <div
+                            class="w-16 h-16 mx-auto bg-orange-50 dark:bg-orange-900/20 rounded-2xl flex items-center justify-center mb-6 text-orange-600 dark:text-orange-400 shadow-sm group-hover:scale-110 transition-transform duration-300">
+                            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                        </div>
+                        <h3 class="font-bold text-lg text-gray-900 dark:text-white mb-2">Clear Status</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">Instant menu bar visibility
+                            of all mount states.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Section -->
+        <section id="features" class="py-32">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-20 reveal-on-scroll">
+                    <h2 class="text-4xl font-bold text-gray-900 dark:text-white tracking-tight">Powerful Features</h2>
+                    <p class="mt-4 text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">Everything you need to
+                        manage remote filesystems.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <!-- Feature Cards -->
+                    <div
+                        class="reveal-on-scroll glass-panel p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
+                        <div
+                            class="w-12 h-12 bg-blue-100 dark:bg-blue-500/20 rounded-xl mb-6 flex items-center justify-center text-blue-600 dark:text-blue-300 group-hover:scale-110 transition-transform">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">Add & Edit Remotes</h3>
+                        <p class="text-gray-600 dark:text-gray-400 leading-relaxed">Simple configuration interface for
+                            all your remote servers.</p>
+                    </div>
+
+                    <div
+                        class="reveal-on-scroll delay-100 glass-panel p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
+                        <div
+                            class="w-12 h-12 bg-indigo-100 dark:bg-indigo-500/20 rounded-xl mb-6 flex items-center justify-center text-indigo-600 dark:text-indigo-300 group-hover:scale-110 transition-transform">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">Per-Remote Control</h3>
+                        <p class="text-gray-600 dark:text-gray-400 leading-relaxed">Connect or disconnect individual
+                            mounts without affecting others.</p>
+                    </div>
+
+                    <div
+                        class="reveal-on-scroll delay-200 glass-panel p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
+                        <div
+                            class="w-12 h-12 bg-pink-100 dark:bg-pink-500/20 rounded-xl mb-6 flex items-center justify-center text-pink-600 dark:text-pink-300 group-hover:scale-110 transition-transform">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">Local Mount Points</h3>
+                        <p class="text-gray-600 dark:text-gray-400 leading-relaxed">Choose exactly where in your local
+                            filesystem remotes appear.</p>
+                    </div>
+
+                    <div
+                        class="reveal-on-scroll glass-panel p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
+                        <div
+                            class="w-12 h-12 bg-teal-100 dark:bg-teal-500/20 rounded-xl mb-6 flex items-center justify-center text-teal-600 dark:text-teal-300 group-hover:scale-110 transition-transform">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">Diagnostics</h3>
+                        <p class="text-gray-600 dark:text-gray-400 leading-relaxed">Built-in logging and clipboard
+                            snapshots for easy troubleshooting.</p>
+                    </div>
+
+                    <div
+                        class="reveal-on-scroll delay-100 glass-panel p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
+                        <div
+                            class="w-12 h-12 bg-amber-100 dark:bg-amber-500/20 rounded-xl mb-6 flex items-center justify-center text-amber-600 dark:text-amber-300 group-hover:scale-110 transition-transform">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">Startup Control</h3>
+                        <p class="text-gray-600 dark:text-gray-400 leading-relaxed">Configure which remotes connect
+                            automatically when the app launches.</p>
+                    </div>
+
+                    <div
+                        class="reveal-on-scroll delay-200 glass-panel p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
+                        <div
+                            class="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-xl mb-6 flex items-center justify-center text-gray-600 dark:text-gray-300 group-hover:scale-110 transition-transform">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">Dark Mode</h3>
+                        <p class="text-gray-600 dark:text-gray-400 leading-relaxed">Fully supports native macOS
+                            appearance switching.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+
+        <!-- Install Instructions -->
+        <section id="install" class="py-32">
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div
+                    class="reveal-on-scroll glass-panel p-1 rounded-2xl mb-16 bg-gradient-to-r from-amber-200/50 to-orange-200/50 dark:from-yellow-900/40 dark:to-orange-900/40 border-0">
+                    <div
+                        class="bg-white/80 dark:bg-black/40 backdrop-blur-md rounded-xl p-8 border border-yellow-400/30 dark:border-yellow-500/30">
+                        <h3 class="text-xl font-bold text-yellow-800 dark:text-yellow-400 mb-4 flex items-center">
+                            <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            Important: Unsigned (NOT code signed / NOT notarized)
+                        </h3>
+                        <p class="text-amber-900/80 dark:text-yellow-200/80 leading-relaxed font-medium">
+                            This open-source build is currently not code-signed or notarized by Apple. You will need to
+                            allow it to run manually via System Settings.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="space-y-16">
+                    <div class="reveal-on-scroll flex items-start group">
+                        <div
+                            class="hidden sm:flex flex-shrink-0 items-center justify-center w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-bold text-xl mr-8 shadow-sm group-hover:scale-110 transition-transform">
+                            1</div>
+                        <div>
+                            <span
+                                class="sm:hidden inline-block px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-bold text-sm mb-2">Step
+                                1</span>
+                            <h4 class="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Download & Install</h4>
+                            <p class="text-lg text-gray-600 dark:text-gray-400 leading-relaxed">Download the DMG file
+                                and drag the app to your Applications folder.</p>
+                        </div>
+                    </div>
+                    <div class="reveal-on-scroll delay-100 flex items-start group">
+                        <div
+                            class="hidden sm:flex flex-shrink-0 items-center justify-center w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-bold text-xl mr-8 shadow-sm group-hover:scale-110 transition-transform">
+                            2</div>
+                        <div>
+                            <span
+                                class="sm:hidden inline-block px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-bold text-sm mb-2">Step
+                                2</span>
+                            <h4 class="text-2xl font-bold mb-3 text-gray-900 dark:text-white">First Launch</h4>
+                            <p class="text-lg text-gray-600 dark:text-gray-400 leading-relaxed">Right-click (or
+                                Control-click) the app icon and select <strong>Open</strong>. This is required for the
+                                first run.</p>
+                        </div>
+                    </div>
+                    <div class="reveal-on-scroll delay-200 flex items-start group">
+                        <div
+                            class="hidden sm:flex flex-shrink-0 items-center justify-center w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-bold text-xl mr-8 shadow-sm group-hover:scale-110 transition-transform">
+                            3</div>
+                        <div>
+                            <span
+                                class="sm:hidden inline-block px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-bold text-sm mb-2">Step
+                                3</span>
+                            <h4 class="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Security Approval</h4>
+                            <p class="text-lg text-gray-600 dark:text-gray-400 leading-relaxed">If prompted, go to
+                                <strong>System Settings > Privacy & Security</strong> and click <strong>Open
+                                    Anyway</strong> near the bottom.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FAQ Accordion -->
+        <section id="faq" class="py-32 bg-gray-50/50 dark:bg-gray-900/50">
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+                <h2
+                    class="text-4xl font-bold text-center mb-5 text-gray-900 dark:text-white tracking-tight reveal-on-scroll">
+                    Frequently Asked Questions</h2>
+                <p
+                    class="text-center text-lg text-gray-600 dark:text-gray-400 mb-14 max-w-2xl mx-auto reveal-on-scroll delay-100">
+                    Quick answers for setup, security, reliability, and daily workflow.
+                </p>
+
+                <div class="space-y-4">
+                    <div
+                        class="reveal-on-scroll glass-panel rounded-2xl overflow-hidden hover:shadow-lg transition-shadow duration-300">
+                        <button id="faq-trigger-1"
+                            class="w-full px-8 py-6 text-left flex justify-between items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            data-accordion-trigger aria-expanded="false" aria-controls="faq-1">
+                            <span class="font-bold text-lg text-gray-900 dark:text-gray-100">Do I need to install
+                                macFUSE and sshfs?</span>
+                            <svg class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        <div id="faq-1" class="hidden px-8 pb-6 pt-0 text-gray-600 dark:text-gray-400 leading-relaxed"
+                            data-accordion-panel role="region" aria-labelledby="faq-trigger-1" hidden>
+                            Yes. macfuseGui is the control plane and UX layer. It relies on macFUSE and sshfs for the
+                            actual mount transport.
+                        </div>
+                    </div>
+
+                    <div
+                        class="reveal-on-scroll delay-100 glass-panel rounded-2xl overflow-hidden hover:shadow-lg transition-shadow duration-300">
+                        <button id="faq-trigger-2"
+                            class="w-full px-8 py-6 text-left flex justify-between items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            data-accordion-trigger aria-expanded="false" aria-controls="faq-2">
+                            <span class="font-bold text-lg text-gray-900 dark:text-gray-100">How does authentication
+                                work?</span>
+                            <svg class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        <div id="faq-2" class="hidden px-8 pb-6 pt-0 text-gray-600 dark:text-gray-400 leading-relaxed"
+                            data-accordion-panel role="region" aria-labelledby="faq-trigger-2" hidden>
+                            Per remote, you can use password auth or private-key auth. Passwords are stored in macOS
+                            Keychain, while `remotes.json` keeps only non-secret configuration fields.
+                        </div>
+                    </div>
+
+                    <div
+                        class="reveal-on-scroll delay-200 glass-panel rounded-2xl overflow-hidden hover:shadow-lg transition-shadow duration-300">
+                        <button id="faq-trigger-3"
+                            class="w-full px-8 py-6 text-left flex justify-between items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            data-accordion-trigger aria-expanded="false" aria-controls="faq-3">
+                            <span class="font-bold text-lg text-gray-900 dark:text-gray-100">Can it manage multiple
+                                remotes at once?</span>
+                            <svg class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        <div id="faq-3" class="hidden px-8 pb-6 pt-0 text-gray-600 dark:text-gray-400 leading-relaxed"
+                            data-accordion-panel role="region" aria-labelledby="faq-trigger-3" hidden>
+                            Yes. Each remote has independent state and controls, so you can connect, disconnect, and
+                            monitor mounts without blocking other active remotes.
+                        </div>
+                    </div>
+
+                    <div
+                        class="reveal-on-scroll delay-300 glass-panel rounded-2xl overflow-hidden hover:shadow-lg transition-shadow duration-300">
+                        <button id="faq-trigger-4"
+                            class="w-full px-8 py-6 text-left flex justify-between items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            data-accordion-trigger aria-expanded="false" aria-controls="faq-4">
+                            <span class="font-bold text-lg text-gray-900 dark:text-gray-100">What happens after
+                                sleep/wake or network drops?</span>
+                            <svg class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        <div id="faq-4" class="hidden px-8 pb-6 pt-0 text-gray-600 dark:text-gray-400 leading-relaxed"
+                            data-accordion-panel role="region" aria-labelledby="faq-trigger-4" hidden>
+                            The app includes recovery passes for sleep/wake, network restoration, and external unmount
+                            events. Desired remotes are automatically reconnected with controlled retry behavior.
+                        </div>
+                    </div>
+
+                    <div
+                        class="reveal-on-scroll glass-panel rounded-2xl overflow-hidden hover:shadow-lg transition-shadow duration-300">
+                        <button id="faq-trigger-5"
+                            class="w-full px-8 py-6 text-left flex justify-between items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            data-accordion-trigger aria-expanded="false" aria-controls="faq-5">
+                            <span class="font-bold text-lg text-gray-900 dark:text-gray-100">Can I choose local mount
+                                folders?</span>
+                            <svg class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        <div id="faq-5" class="hidden px-8 pb-6 pt-0 text-gray-600 dark:text-gray-400 leading-relaxed"
+                            data-accordion-panel role="region" aria-labelledby="faq-trigger-5" hidden>
+                            Yes. Every remote can mount to a user-selected local path. The app also enforces mount path
+                            uniqueness to prevent collisions.
+                        </div>
+                    </div>
+
+                    <div
+                        class="reveal-on-scroll delay-100 glass-panel rounded-2xl overflow-hidden hover:shadow-lg transition-shadow duration-300">
+                        <button id="faq-trigger-6"
+                            class="w-full px-8 py-6 text-left flex justify-between items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            data-accordion-trigger aria-expanded="false" aria-controls="faq-6">
+                            <span class="font-bold text-lg text-gray-900 dark:text-gray-100">Is there built-in
+                                diagnostics?</span>
+                            <svg class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        <div id="faq-6" class="hidden px-8 pb-6 pt-0 text-gray-600 dark:text-gray-400 leading-relaxed"
+                            data-accordion-panel role="region" aria-labelledby="faq-trigger-6" hidden>
+                            Yes. You can copy a diagnostics snapshot with environment checks, remote states, active
+                            operations, and recent logs to speed up troubleshooting.
+                        </div>
+                    </div>
+
+                    <div
+                        class="reveal-on-scroll delay-200 glass-panel rounded-2xl overflow-hidden hover:shadow-lg transition-shadow duration-300">
+                        <button id="faq-trigger-7"
+                            class="w-full px-8 py-6 text-left flex justify-between items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            data-accordion-trigger aria-expanded="false" aria-controls="faq-7">
+                            <span class="font-bold text-lg text-gray-900 dark:text-gray-100">Why does macOS warn on
+                                first launch?</span>
+                            <svg class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        <div id="faq-7" class="hidden px-8 pb-6 pt-0 text-gray-600 dark:text-gray-400 leading-relaxed"
+                            data-accordion-panel role="region" aria-labelledby="faq-trigger-7" hidden>
+                            Current public builds are unsigned and not notarized. Open once via Finder right-click
+                            <strong>Open</strong>, or approve it in <strong>System Settings → Privacy & Security</strong>.
+                        </div>
+                    </div>
+
+                    <div
+                        class="reveal-on-scroll delay-300 glass-panel rounded-2xl overflow-hidden hover:shadow-lg transition-shadow duration-300">
+                        <button id="faq-trigger-8"
+                            class="w-full px-8 py-6 text-left flex justify-between items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            data-accordion-trigger aria-expanded="false" aria-controls="faq-8">
+                            <span class="font-bold text-lg text-gray-900 dark:text-gray-100">Can I open mounted paths
+                                directly in code editors?</span>
+                            <svg class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        <div id="faq-8" class="hidden px-8 pb-6 pt-0 text-gray-600 dark:text-gray-400 leading-relaxed"
+                            data-accordion-panel role="region" aria-labelledby="faq-trigger-8" hidden>
+                            Yes. Once connected, mounted folders can be opened in your preferred editor via the app's
+                            Open-In editor plugin system.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-white/5 py-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center">
+            <div class="mb-4 md:mb-0 text-center md:text-left">
+                <span class="font-bold text-xl text-gray-900 dark:text-white tracking-tight">macfuseGui</span>
+                <p class="text-sm text-gray-500 mt-2">&copy; <span id="current-year">2026</span> Open Source
+                    Contributors.</p>
+            </div>
+            <div class="flex space-x-8">
+                <a href="#"
+                    class="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-300 transform hover:scale-110">
+                    <span class="sr-only">GitHub</span>
+                    <svg class="h-8 w-8" fill="currentColor" viewBox="0 0 24 24">
+                        <path fill-rule="evenodd"
+                            d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+                            clip-rule="evenodd" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+
+</html>
