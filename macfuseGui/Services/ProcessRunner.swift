@@ -59,8 +59,13 @@ extension ProcessRunning {
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 // @unchecked Sendable is safe here because all mutable shared state is behind processRegistryLock.
 final class ProcessRunner: ProcessRunning, @unchecked Sendable {
+    private struct ProcessHandle {
+        let pid: Int32
+        let processGroupID: Int32?
+    }
+
     private let processRegistryLock = NSLock()
-    private var runningPIDs: [UUID: Int32] = [:]
+    private var runningPIDs: [UUID: ProcessHandle] = [:]
     private var pendingCancellations: Set<UUID> = []
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -162,7 +167,16 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                         }
 
                         try process.run()
-                        self.registerRunningProcess(commandID: commandID, pid: process.processIdentifier)
+                        let pid = process.processIdentifier
+                        var processGroupID: Int32?
+                        if setpgid(pid, pid) == 0 {
+                            processGroupID = pid
+                        }
+                        self.registerRunningProcess(
+                            commandID: commandID,
+                            pid: pid,
+                            processGroupID: processGroupID
+                        )
 
                         if let standardInput, let inputData = standardInput.data(using: .utf8) {
                             stdinPipe.fileHandleForWriting.write(inputData)
@@ -177,12 +191,18 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                             stopCaptureHandlers()
 
                             if process.isRunning {
+                                if let processGroupID, processGroupID > 1 {
+                                    _ = kill(-processGroupID, SIGTERM)
+                                }
                                 process.terminate()
                             }
 
                             // Keep timeout teardown short so caller-level watchdog budgets stay meaningful.
                             let graceResult = terminationSemaphore.wait(timeout: .now() + 0.6)
                             if graceResult == .timedOut, process.isRunning {
+                                if let processGroupID, processGroupID > 1 {
+                                    _ = kill(-processGroupID, SIGKILL)
+                                }
                                 _ = kill(process.processIdentifier, SIGKILL)
                                 _ = terminationSemaphore.wait(timeout: .now() + 0.6)
                             }
@@ -225,14 +245,14 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
         }
     }
 
-    private func registerRunningProcess(commandID: UUID, pid: Int32) {
+    private func registerRunningProcess(commandID: UUID, pid: Int32, processGroupID: Int32?) {
         processRegistryLock.lock()
-        runningPIDs[commandID] = pid
+        runningPIDs[commandID] = ProcessHandle(pid: pid, processGroupID: processGroupID)
         let cancelImmediately = pendingCancellations.remove(commandID) != nil
         processRegistryLock.unlock()
 
         if cancelImmediately {
-            terminatePID(pid)
+            terminateProcess(ProcessHandle(pid: pid, processGroupID: processGroupID))
         }
     }
 
@@ -245,21 +265,27 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
 
     private func cancelRunningProcess(commandID: UUID) {
         processRegistryLock.lock()
-        if let pid = runningPIDs[commandID] {
+        if let processHandle = runningPIDs[commandID] {
             processRegistryLock.unlock()
-            terminatePID(pid)
+            terminateProcess(processHandle)
             return
         }
         pendingCancellations.insert(commandID)
         processRegistryLock.unlock()
     }
 
-    private func terminatePID(_ pid: Int32) {
-        guard pid > 1 else {
+    private func terminateProcess(_ handle: ProcessHandle) {
+        guard handle.pid > 1 else {
             return
         }
-        _ = kill(pid, SIGTERM)
+        if let processGroupID = handle.processGroupID, processGroupID > 1 {
+            _ = kill(-processGroupID, SIGTERM)
+        }
+        _ = kill(handle.pid, SIGTERM)
         usleep(250_000)
-        _ = kill(pid, SIGKILL)
+        if let processGroupID = handle.processGroupID, processGroupID > 1 {
+            _ = kill(-processGroupID, SIGKILL)
+        }
+        _ = kill(handle.pid, SIGKILL)
     }
 }

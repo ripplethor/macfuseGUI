@@ -198,7 +198,9 @@ final class RemotesViewModel: ObservableObject {
     private var wakePreflightInProgress = false
     private var workspaceObservers: [NSObjectProtocol] = []
     private var networkMonitor: NWPathMonitor?
-    private var networkReachable: Bool = true
+    private var networkReachable: Bool = false
+    private var pendingStartupAutoConnectIDs: Set<UUID> = []
+    private var networkRestoreDebounceTask: Task<Void, Never>?
     private var recoveryMonitoringStarted = false
     private var shutdownInProgress = false
     private var recoveryIndicatorReason: String?
@@ -208,6 +210,7 @@ final class RemotesViewModel: ObservableObject {
     private let refreshWatchdogTimeout: TimeInterval = 18
     // When everything looks healthy, periodic probes are intentionally less frequent.
     private let healthyPeriodicProbeInterval: TimeInterval = 60
+    private let networkRestoredDebounceSeconds: TimeInterval = 1.5
     private var operationWatchdogTasks: [UUID: Task<Void, Never>] = [:]
     // Hard timeout for actual connect operation body.
     private let connectTimeoutSeconds: TimeInterval = 35
@@ -266,6 +269,8 @@ final class RemotesViewModel: ObservableObject {
         reconnectTasks.removeAll()
         recoveryBurstTask?.cancel()
         recoveryBurstTask = nil
+        networkRestoreDebounceTask?.cancel()
+        networkRestoreDebounceTask = nil
 
         let notificationCenter = NSWorkspace.shared.notificationCenter
         workspaceObservers.forEach { notificationCenter.removeObserver($0) }
@@ -710,11 +715,48 @@ final class RemotesViewModel: ObservableObject {
             return
         }
 
+        pendingStartupAutoConnectIDs.formUnion(launchTargets.map(\.id))
+        desiredConnections.formUnion(launchTargets.map(\.id))
+
         diagnostics.append(
             level: .info,
             category: "startup",
             message: "Startup auto-connect queued for \(launchTargets.count) remote(s)."
         )
+
+        guard networkReachable else {
+            diagnostics.append(
+                level: .info,
+                category: "startup",
+                message: "Deferring startup auto-connect for \(launchTargets.count) remote(s): network is not reachable yet."
+            )
+            return
+        }
+
+        await runPendingStartupAutoConnect(trigger: "startup")
+    }
+
+    /// Beginner note: Startup auto-connect can be deferred until network becomes reachable.
+    /// This helper runs the pending set exactly once per remote.
+    private func runPendingStartupAutoConnect(trigger: String) async {
+        let pendingIDs = pendingStartupAutoConnectIDs
+        guard !pendingIDs.isEmpty else {
+            return
+        }
+
+        let launchTargets = remotes.filter { pendingIDs.contains($0.id) }
+        guard !launchTargets.isEmpty else {
+            pendingStartupAutoConnectIDs.removeAll()
+            return
+        }
+
+        if trigger != "startup" {
+            diagnostics.append(
+                level: .info,
+                category: "startup",
+                message: "Running deferred startup auto-connect for \(launchTargets.count) remote(s) after \(trigger)."
+            )
+        }
 
         await withTaskGroup(of: Void.self) { group in
             for remote in launchTargets {
@@ -742,6 +784,8 @@ final class RemotesViewModel: ObservableObject {
             }
             await group.waitForAll()
         }
+
+        pendingStartupAutoConnectIDs.subtract(launchTargets.map(\.id))
     }
 
     /// Beginner note: Emergency user action that aggressively tears down all mount processes.
@@ -1340,6 +1384,7 @@ final class RemotesViewModel: ObservableObject {
         recoveryNonConnectedStrikes = recoveryNonConnectedStrikes.filter { validIDs.contains($0.key) }
         lastRecoveryRefreshAt = lastRecoveryRefreshAt.filter { validIDs.contains($0.key) }
         passwordCache = passwordCache.filter { validIDs.contains($0.key) }
+        pendingStartupAutoConnectIDs = pendingStartupAutoConnectIDs.intersection(validIDs)
 
         for remoteID in Array(reconnectTasks.keys) where !validIDs.contains(remoteID) {
             cancelScheduledReconnect(for: remoteID)
@@ -1667,10 +1712,34 @@ final class RemotesViewModel: ObservableObject {
         }
 
         if isReachable {
-            beginRecoveryIndicator(reason: "network-restored")
-            diagnostics.append(level: .info, category: "recovery", message: "Network became reachable. Running staged recovery passes.")
-            scheduleRecoveryBurst(trigger: "network-restored", delaySeconds: [0, 2, 6])
+            networkRestoreDebounceTask?.cancel()
+            networkRestoreDebounceTask = Task { @MainActor [weak self] in
+                guard let self else {
+                    return
+                }
+                if self.networkRestoredDebounceSeconds > 0 {
+                    try? await Task.sleep(
+                        nanoseconds: UInt64(self.networkRestoredDebounceSeconds * 1_000_000_000)
+                    )
+                }
+                guard !Task.isCancelled else {
+                    return
+                }
+                guard self.networkReachable else {
+                    return
+                }
+                self.beginRecoveryIndicator(reason: "network-restored")
+                self.diagnostics.append(
+                    level: .info,
+                    category: "recovery",
+                    message: "Network became reachable. Running staged recovery passes."
+                )
+                self.scheduleRecoveryBurst(trigger: "network-restored", delaySeconds: [0, 2, 6])
+                await self.runPendingStartupAutoConnect(trigger: "network-restored")
+            }
         } else {
+            networkRestoreDebounceTask?.cancel()
+            networkRestoreDebounceTask = nil
             diagnostics.append(level: .warning, category: "recovery", message: "Network became unreachable. Waiting before reconnect attempts.")
             cancelAllScheduledReconnects(reason: "network-unreachable")
             refreshRecoveryIndicator()
@@ -1901,6 +1970,28 @@ final class RemotesViewModel: ObservableObject {
 
             guard self.status(for: remoteID).state != .connected else {
                 self.reconnectAttempts[remoteID] = 0
+                return
+            }
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            // Re-verify current mount state right before reconnect to avoid unnecessary
+            // reconnect attempts when mount status recovered between scheduling and fire time.
+            await self.runOperation(
+                remoteID: remoteID,
+                intent: .refresh,
+                trigger: .recovery,
+                conflictPolicy: .skipIfBusy,
+                timeout: self.refreshWatchdogTimeout
+            ) { [weak self] operationID in
+                await self?.performRefreshStatus(remoteID: remoteID, operationID: operationID)
+            }
+
+            if self.status(for: remoteID).state == .connected {
+                self.reconnectAttempts[remoteID] = 0
+                self.recoveryNonConnectedStrikes[remoteID] = 0
                 return
             }
 
@@ -2715,6 +2806,8 @@ final class RemotesViewModel: ObservableObject {
 
         recoveryBurstTask?.cancel()
         recoveryBurstTask = nil
+        networkRestoreDebounceTask?.cancel()
+        networkRestoreDebounceTask = nil
 
         operationWatchdogTasks.values.forEach { $0.cancel() }
         operationWatchdogTasks.removeAll()
@@ -2731,6 +2824,7 @@ final class RemotesViewModel: ObservableObject {
         recoveryNonConnectedStrikes.removeAll()
         lastRecoveryRefreshAt.removeAll()
         desiredConnections.removeAll()
+        pendingStartupAutoConnectIDs.removeAll()
 
         clearRecoveryIndicator()
 
