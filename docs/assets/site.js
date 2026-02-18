@@ -43,17 +43,18 @@ function toggleTheme() {
     }
 
     window.clearTimeout(themeTransitionTimer);
-    root.classList.add("theme-transitioning");
-    // Force style flush so transition styles are active before theme class flips.
-    void root.offsetWidth;
+    if (root.classList.contains("theme-fading")) return;
 
-    root.classList.toggle("dark", nextIsDark);
-    localStorage.setItem("theme", nextIsDark ? "dark" : "light");
-    updateThemeUI();
-
+    root.classList.add("theme-fading");
     themeTransitionTimer = window.setTimeout(() => {
-        root.classList.remove("theme-transitioning");
-    }, 460);
+        root.classList.toggle("dark", nextIsDark);
+        localStorage.setItem("theme", nextIsDark ? "dark" : "light");
+        updateThemeUI();
+
+        themeTransitionTimer = window.setTimeout(() => {
+            root.classList.remove("theme-fading");
+        }, 170);
+    }, 120);
 }
 
 function updateThemeUI() {
