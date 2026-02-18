@@ -10,11 +10,61 @@ const footerGithubBtn = document.getElementById("footer-github-btn");
 const yearSpan = document.getElementById("current-year");
 
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+const prefersCoarsePointer = window.matchMedia("(pointer: coarse)");
+const prefersSmallViewport = window.matchMedia("(max-width: 1200px)");
 const THEME_FADE_IN_MS = 260;
 const THEME_FADE_OUT_MS = 320;
+const FX_MODE_STORAGE_KEY = "fx-mode";
 let themeTransitionTimer = 0;
-if (!prefersReducedMotion.matches) {
-    root.classList.add("motion-enabled");
+let isLiteFxMode = false;
+
+function detectAutoLiteFxMode() {
+    const saveData = Boolean(navigator.connection && navigator.connection.saveData);
+    const memoryGiB = typeof navigator.deviceMemory === "number" ? navigator.deviceMemory : null;
+    const logicalCores = typeof navigator.hardwareConcurrency === "number" ? navigator.hardwareConcurrency : null;
+    const lowMemory = memoryGiB !== null && memoryGiB <= 8;
+    const modestCpu = logicalCores !== null && logicalCores <= 8;
+
+    return (
+        prefersReducedMotion.matches ||
+        prefersCoarsePointer.matches ||
+        prefersSmallViewport.matches ||
+        saveData ||
+        lowMemory ||
+        modestCpu
+    );
+}
+
+function resolvePreferredFxMode() {
+    try {
+        const saved = localStorage.getItem(FX_MODE_STORAGE_KEY);
+        if (saved === "lite" || saved === "full") {
+            return saved;
+        }
+    } catch (e) { }
+
+    return detectAutoLiteFxMode() ? "lite" : "full";
+}
+
+function applyFxMode(mode) {
+    isLiteFxMode = mode === "lite";
+    root.dataset.fxMode = isLiteFxMode ? "lite" : "full";
+
+    if (isLiteFxMode || prefersReducedMotion.matches) {
+        root.classList.remove("motion-enabled");
+    } else {
+        root.classList.add("motion-enabled");
+    }
+}
+
+function initFxMode() {
+    applyFxMode(resolvePreferredFxMode());
+}
+
+function setupVisibilityPerformance() {
+    document.addEventListener("visibilitychange", () => {
+        root.classList.toggle("tab-hidden", document.hidden);
+    });
 }
 
 function initTheme() {
@@ -249,7 +299,7 @@ function setupScrollReveal() {
     };
 
     const syncMotionMode = () => {
-        if (prefersReducedMotion.matches) {
+        if (prefersReducedMotion.matches || isLiteFxMode) {
             stop();
             root.classList.remove("motion-enabled");
             showAll();
@@ -270,7 +320,7 @@ function setupScrollReveal() {
 }
 
 function setupHeroParallax() {
-    if (prefersReducedMotion.matches) return;
+    if (prefersReducedMotion.matches || isLiteFxMode) return;
 
     const heroStage = document.querySelector(".perspective-1000 > div");
     if (!heroStage) return;
@@ -324,9 +374,11 @@ function setupHeroParallax() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    initFxMode();
     initTheme();
     setupLinks();
     setYear();
+    setupVisibilityPerformance();
     setupAccordion();
     setupHeaderMotion();
     setupScrollReveal();

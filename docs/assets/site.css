@@ -79,6 +79,70 @@ html.theme-fading #theme-fade-layer {
     inset: 0;
 }
 
+/* Performance mode to keep fan noise and memory usage under control */
+html[data-fx-mode="lite"] .space-canvas {
+    opacity: 0.64;
+}
+
+html.dark[data-fx-mode="lite"] .space-canvas {
+    opacity: 0.76;
+}
+
+html[data-fx-mode="lite"] .space-dust,
+html[data-fx-mode="lite"] .nebula-cloud,
+html[data-fx-mode="lite"] .starfield {
+    animation: none !important;
+    transform: none !important;
+    will-change: auto;
+}
+
+html[data-fx-mode="lite"] .nebula-cloud {
+    filter: blur(56px) saturate(114%);
+    opacity: 0.26;
+}
+
+html[data-fx-mode="lite"] .starfield-near,
+html[data-fx-mode="lite"] .star-glints {
+    display: none;
+}
+
+html[data-fx-mode="lite"] .starfield-far {
+    opacity: 0.08;
+}
+
+html[data-fx-mode="lite"] .starfield-mid {
+    opacity: 0.14;
+}
+
+html.dark[data-fx-mode="lite"] .starfield-far {
+    opacity: 0.18;
+}
+
+html.dark[data-fx-mode="lite"] .starfield-mid {
+    opacity: 0.22;
+}
+
+html[data-fx-mode="lite"] .glass-panel {
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+}
+
+html[data-fx-mode="lite"] header[data-scrolled="true"] {
+    backdrop-filter: blur(14px) saturate(150%);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+}
+
+html[data-fx-mode="lite"] .hero-stage {
+    transform: none !important;
+    will-change: auto;
+}
+
+html.tab-hidden .space-dust,
+html.tab-hidden .nebula-cloud,
+html.tab-hidden .starfield {
+    animation-play-state: paused !important;
+}
+
 .space-gradient {
     transition: opacity 520ms cubic-bezier(0.22, 1, 0.36, 1);
 }
