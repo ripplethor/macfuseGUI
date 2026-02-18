@@ -303,4 +303,8 @@ Interpretation:
 
 ## License
 
-macfuseGui is licensed under GPLv3. If you distribute a modified version, you must also distribute the source under GPLv3.
+This project is licensed under the GNU General Public License v3.0.
+
+If you distribute a modified version, you must also provide the source under GPLv3.
+
+See [`LICENSE`](./LICENSE).

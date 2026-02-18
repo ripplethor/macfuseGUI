@@ -2,6 +2,11 @@
 
 This guide is for developers who are new to this codebase.
 
+## License
+
+Contributions are accepted under the GNU General Public License v3.0 (GPLv3). By contributing, you agree that your contributions are licensed under GPLv3, consistent with the rest of the project.
+See [`LICENSE`](./LICENSE).
+
 ## 1) Read Before Editing
 
 Start here, in this order:
