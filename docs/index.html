@@ -46,6 +46,10 @@
       "name": "macfuseGui",
       "operatingSystem": "macOS",
       "applicationCategory": "UtilitiesApplication",
+      "sameAs": [
+        "https://github.com/ripplethor/macfuseGUI"
+      ],
+      "downloadUrl": "https://github.com/ripplethor/macfuseGUI/releases/latest",
       "offers": {
         "@type": "Offer",
         "price": "0",
@@ -124,6 +128,9 @@
                         class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200">Features</a>
                     <a href="#install"
                         class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200">Install</a>
+                    <a href="#how-it-works"
+                        class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200">How it
+                        works</a>
 
                     <a href="#faq"
                         class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200">FAQ</a>
@@ -158,17 +165,17 @@
                 <div class="reveal-on-scroll">
                     <h1
                         class="text-6xl sm:text-8xl font-black tracking-tighter text-gray-900 dark:text-white mb-6 leading-none">
-                        Open Source GUI <br />
+                        SSHFS GUI <br />
                         <span
                             class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600 animate-gradient-text">for
-                            macFUSE.</span>
+                            macOS.</span>
                     </h1>
                     <p
                         class="mt-6 max-w-2xl mx-auto text-xl sm:text-2xl text-gray-600 dark:text-gray-300 mb-12 font-medium leading-relaxed">
                         Stop typing <code
                             class="bg-gray-200 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono text-blue-600 dark:text-blue-400">mount</code>
-                        commands. <br class="hidden sm:block" />
-                        Secure, native SSHFS management for macOS with arm64 and x86_64 downloads.
+                        commands; macfuseGui uses macFUSE + sshfs to mount SSHFS on macOS, with separate Apple Silicon
+                        (arm64) and Intel (x86_64) builds.
                     </p>
 
                     <div class="mt-10 flex justify-center gap-4 mb-20">
@@ -183,7 +190,7 @@
                                 Download DMG
                             </span>
                         </a>
-                        <a id="github-btn" href="#"
+                        <a id="github-btn" href="https://github.com/ripplethor/macfuseGUI"
                             class="px-8 py-4 rounded-full glass-panel text-gray-900 dark:text-white font-semibold text-lg hover:bg-white/40 dark:hover:bg-gray-800/60 transition-all duration-300 flex items-center border border-gray-200 dark:border-white/10">
                             <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
                                 <path fill-rule="evenodd"
@@ -295,7 +302,7 @@
                                     <div class="w-3 h-3 rounded-full bg-[#FEBC2E]"></div>
                                     <div class="w-3 h-3 rounded-full bg-[#28C840]"></div>
                                 </div>
-                                <span class="text-gray-400 text-xs font-medium">index.ts — macfuseGui — Visual
+                                <span class="text-gray-400 text-xs font-medium">index.ts - macfuseGui - Visual
                                     Studio Code</span>
                             </div>
 
@@ -500,14 +507,14 @@
             </div>
         </section>
 
-        <!-- Features Section -->
-        <section id="features" class="py-32">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="text-center mb-20 reveal-on-scroll">
-                    <h2 class="text-4xl font-bold text-gray-900 dark:text-white tracking-tight">Powerful Features</h2>
-                    <p class="mt-4 text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">Everything you need to
-                        manage remote filesystems.</p>
-                </div>
+	        <!-- Features Section -->
+	        <section id="features" class="py-32">
+	            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+	                <div class="text-center mb-20 reveal-on-scroll">
+	                    <h2 class="text-4xl font-bold text-gray-900 dark:text-white tracking-tight">Features</h2>
+	                    <p class="mt-4 text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">Everything you need to
+	                        manage remote filesystems.</p>
+	                </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     <!-- Feature Cards -->
@@ -600,42 +607,95 @@
 
 
 
-        <!-- Install Instructions -->
-        <section id="install" class="py-32">
-            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div
-                    class="reveal-on-scroll glass-panel p-1 rounded-2xl mb-16 bg-gradient-to-r from-amber-200/50 to-orange-200/50 dark:from-yellow-900/40 dark:to-orange-900/40 border-0">
-                    <div
-                        class="bg-white/80 dark:bg-black/40 backdrop-blur-md rounded-xl p-8 border border-yellow-400/30 dark:border-yellow-500/30">
-                        <h3 class="text-xl font-bold text-yellow-800 dark:text-yellow-400 mb-4 flex items-center">
-                            <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+	        <!-- Install Instructions -->
+	        <section id="install" class="py-32">
+	            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div class="text-center mb-16 reveal-on-scroll">
+                        <h2 class="text-4xl font-bold text-gray-900 dark:text-white tracking-tight">Install</h2>
+                        <p class="mt-4 text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+                            Prerequisites, download selection, and first launch steps to mount SSHFS on macOS.
+                        </p>
+                    </div>
+	                <div
+	                    class="reveal-on-scroll glass-panel p-1 rounded-2xl mb-12 bg-gradient-to-r from-amber-200/50 to-orange-200/50 dark:from-yellow-900/40 dark:to-orange-900/40 border-0">
+	                    <div
+	                        class="bg-white/80 dark:bg-black/40 backdrop-blur-md rounded-xl p-8 border border-yellow-400/30 dark:border-yellow-500/30">
+	                        <h3 class="text-xl font-bold text-yellow-800 dark:text-yellow-400 mb-4 flex items-center">
+	                            <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                             </svg>
-                            Important: Unsigned (NOT code signed / NOT notarized)
-                        </h3>
-                        <p class="text-amber-900/80 dark:text-yellow-200/80 leading-relaxed font-medium">
-                            This open-source build is currently not code-signed or notarized by Apple. You will need to
-                            allow it to run manually via System Settings.
-                        </p>
-                    </div>
-                </div>
+	                            Important: Unsigned (NOT code signed / NOT notarized)
+	                        </h3>
+	                        <p class="text-amber-900/80 dark:text-yellow-200/80 leading-relaxed font-medium">
+	                            This open-source build is currently not code-signed or notarized by Apple. On first
+	                            launch, macOS will show a warning and you will need to allow it to run via System
+	                            Settings.
+                                The source code is on
+                                <a href="https://github.com/ripplethor/macfuseGUI" class="underline underline-offset-4 decoration-amber-500/60 hover:decoration-amber-500">GitHub</a>
+                                and release artifacts are on
+                                <a href="https://github.com/ripplethor/macfuseGUI/releases/latest" class="underline underline-offset-4 decoration-amber-500/60 hover:decoration-amber-500">Releases</a>.
+	                        </p>
+	                    </div>
+	                </div>
 
-                <div class="space-y-16">
-                    <div class="reveal-on-scroll flex items-start group">
-                        <div
-                            class="hidden sm:flex flex-shrink-0 items-center justify-center w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-bold text-xl mr-8 shadow-sm group-hover:scale-110 transition-transform">
-                            1</div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
+                        <div class="reveal-on-scroll glass-panel p-8 rounded-3xl shadow-sm">
+                            <h3 class="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Prerequisites</h3>
+                            <p class="text-gray-600 dark:text-gray-400 leading-relaxed">
+                                Install macFUSE and sshfs on macOS:
+                            </p>
+                            <div class="mt-5 rounded-2xl bg-gray-950/90 text-gray-100 border border-white/10 overflow-hidden">
+                                <pre class="p-5 text-sm leading-relaxed overflow-x-auto"><code class="font-mono">brew install --cask macfuse
+brew install sshfs-mac</code></pre>
+                            </div>
+                        </div>
+                        <div class="reveal-on-scroll delay-100 glass-panel p-8 rounded-3xl shadow-sm">
+                            <h3 class="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Choose your download</h3>
+                            <p class="text-gray-600 dark:text-gray-400 leading-relaxed">
+                                Apple Silicon Macs use <code class="font-mono text-sm">arm64</code>. Intel Macs use
+                                <code class="font-mono text-sm">x86_64</code>. Check your Mac with:
+                            </p>
+                            <div class="mt-5 rounded-2xl bg-gray-950/90 text-gray-100 border border-white/10 overflow-hidden">
+                                <pre class="p-5 text-sm leading-relaxed overflow-x-auto"><code class="font-mono">uname -m</code></pre>
+                            </div>
+                            <p class="mt-5 text-gray-600 dark:text-gray-400 leading-relaxed">
+                                On the GitHub release page, download the DMG that ends with
+                                <code class="font-mono text-sm">-macos-arm64.dmg</code> or
+                                <code class="font-mono text-sm">-macos-x86_64.dmg</code>.
+                            </p>
+                            <div class="mt-6 flex flex-col sm:flex-row gap-3">
+                                <a href="https://github.com/ripplethor/macfuseGUI/releases/latest"
+                                    class="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-[0_0_18px_rgba(37,99,235,0.35)] transition-colors text-center">
+                                    Apple Silicon (arm64)
+                                </a>
+                                <a href="https://github.com/ripplethor/macfuseGUI/releases/latest"
+                                    class="px-5 py-3 rounded-2xl glass-panel text-gray-900 dark:text-white font-semibold hover:bg-white/40 dark:hover:bg-gray-800/60 transition-colors text-center border border-gray-200 dark:border-white/10">
+                                    Intel (x86_64)
+                                </a>
+                            </div>
+                            <p class="mt-4 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                                Release page: <a href="https://github.com/ripplethor/macfuseGUI/releases/latest"
+                                    class="underline underline-offset-4 decoration-blue-500/50 hover:decoration-blue-500">https://github.com/ripplethor/macfuseGUI/releases/latest</a>
+                            </p>
+                        </div>
+                    </div>
+
+	                <div class="space-y-16">
+	                    <div class="reveal-on-scroll flex items-start group">
+	                        <div
+	                            class="hidden sm:flex flex-shrink-0 items-center justify-center w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-bold text-xl mr-8 shadow-sm group-hover:scale-110 transition-transform">
+	                            1</div>
                         <div>
                             <span
                                 class="sm:hidden inline-block px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-bold text-sm mb-2">Step
                                 1</span>
-                            <h4 class="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Download & Install</h4>
-                            <p class="text-lg text-gray-600 dark:text-gray-400 leading-relaxed">Download the DMG file
-                                for your Mac architecture (Apple Silicon arm64 or Intel x86_64), then drag the app to
-                                your Applications folder.</p>
-                        </div>
-                    </div>
+	                            <h4 class="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Download & Install</h4>
+	                            <p class="text-lg text-gray-600 dark:text-gray-400 leading-relaxed">Download the DMG file
+	                                for your Mac architecture (Apple Silicon arm64 or Intel x86_64), then drag the app to
+	                                your Applications folder.</p>
+	                        </div>
+	                    </div>
                     <div class="reveal-on-scroll delay-100 flex items-start group">
                         <div
                             class="hidden sm:flex flex-shrink-0 items-center justify-center w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-bold text-xl mr-8 shadow-sm group-hover:scale-110 transition-transform">
@@ -666,19 +726,54 @@
                         </div>
                     </div>
                 </div>
-            </div>
-        </section>
+	            </div>
+	        </section>
 
-        <!-- FAQ Accordion -->
-        <section id="faq" class="py-32 bg-gray-50/50 dark:bg-gray-900/50">
-            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-                <h2
-                    class="text-4xl font-bold text-center mb-5 text-gray-900 dark:text-white tracking-tight reveal-on-scroll">
-                    Frequently Asked Questions</h2>
-                <p
-                    class="text-center text-lg text-gray-600 dark:text-gray-400 mb-14 max-w-2xl mx-auto reveal-on-scroll delay-100">
-                    Quick answers for setup, security, reliability, and daily workflow.
-                </p>
+            <!-- How It Works -->
+            <section id="how-it-works" class="py-32">
+                <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div class="text-center mb-16 reveal-on-scroll">
+                        <h2 class="text-4xl font-bold text-gray-900 dark:text-white tracking-tight">How it works</h2>
+                        <p class="mt-4 text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+                            macfuseGui is a native menu bar app that orchestrates sshfs and macFUSE so remote folders
+                            mount like normal directories in Finder and your editor.
+                        </p>
+                    </div>
+
+                    <div class="reveal-on-scroll delay-100 glass-panel p-8 rounded-3xl shadow-sm">
+                        <ul class="space-y-5 text-gray-700 dark:text-gray-300 leading-relaxed">
+                            <li>
+                                <strong class="text-gray-900 dark:text-white">Orchestrates sshfs:</strong>
+                                macfuseGui builds safe mount commands and manages connect, disconnect, and recovery.
+                            </li>
+                            <li>
+                                <strong class="text-gray-900 dark:text-white">macFUSE provides the filesystem layer:</strong>
+                                mounts appear as standard macOS folders, so tools behave normally.
+                            </li>
+                            <li>
+                                <strong class="text-gray-900 dark:text-white">Secrets live in Keychain:</strong>
+                                passwords are stored in macOS Keychain, not in config files.
+                            </li>
+                            <li>
+                                <strong class="text-gray-900 dark:text-white">Config is JSON:</strong>
+                                non-secret remote settings are stored in
+                                <code class="font-mono text-sm">~/Library/Application Support/macfuseGui/remotes.json</code>.
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+	        <!-- FAQ Accordion -->
+	        <section id="faq" class="py-32 bg-gray-50/50 dark:bg-gray-900/50">
+	            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+	                <h2
+	                    class="text-4xl font-bold text-center mb-5 text-gray-900 dark:text-white tracking-tight reveal-on-scroll">
+	                    FAQ</h2>
+	                <p
+	                    class="text-center text-lg text-gray-600 dark:text-gray-400 mb-14 max-w-2xl mx-auto reveal-on-scroll delay-100">
+	                    Quick answers for setup, security, reliability, and daily workflow.
+	                </p>
 
                 <div class="space-y-4">
                     <div
