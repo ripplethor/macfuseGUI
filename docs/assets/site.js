@@ -10,6 +10,8 @@ const footerGithubBtn = document.getElementById("footer-github-btn");
 const yearSpan = document.getElementById("current-year");
 
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+const THEME_FADE_IN_MS = 260;
+const THEME_FADE_OUT_MS = 320;
 let themeTransitionTimer = 0;
 if (!prefersReducedMotion.matches) {
     root.classList.add("motion-enabled");
@@ -53,8 +55,8 @@ function toggleTheme() {
 
         themeTransitionTimer = window.setTimeout(() => {
             root.classList.remove("theme-fading");
-        }, 170);
-    }, 120);
+        }, THEME_FADE_OUT_MS);
+    }, THEME_FADE_IN_MS);
 }
 
 function updateThemeUI() {

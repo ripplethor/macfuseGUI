@@ -45,7 +45,7 @@ header[data-scrolled="true"] {
     background:
         radial-gradient(80% 56% at 50% 12%, rgba(248, 252, 255, 0.28), transparent 76%),
         linear-gradient(180deg, rgba(228, 238, 255, 0.22) 0%, rgba(212, 226, 252, 0.18) 100%);
-    transition: opacity 180ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition: opacity 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .dark #theme-fade-layer {
@@ -80,7 +80,7 @@ html.theme-fading #theme-fade-layer {
 }
 
 .space-gradient {
-    transition: opacity 280ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition: opacity 520ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .space-gradient-light {
