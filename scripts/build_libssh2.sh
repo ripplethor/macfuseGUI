@@ -14,19 +14,6 @@ SOURCE_ROOT="$ROOT_DIR/third_party/src"
 LIBSSH2_TARBALL="$SOURCE_ROOT/libssh2-${LIBSSH2_VERSION}.tar.gz"
 OPENSSL_TARBALL="$SOURCE_ROOT/openssl-${OPENSSL_VERSION}.tar.gz"
 
-LIBSSH2_OUTPUT_ROOT="$ROOT_DIR/build/third_party/libssh2"
-LIBSSH2_OUTPUT_INCLUDE="$LIBSSH2_OUTPUT_ROOT/include"
-LIBSSH2_OUTPUT_LIB="$LIBSSH2_OUTPUT_ROOT/lib"
-
-OPENSSL_OUTPUT_ROOT="$ROOT_DIR/build/third_party/openssl"
-OPENSSL_OUTPUT_INCLUDE="$OPENSSL_OUTPUT_ROOT/include"
-OPENSSL_OUTPUT_LIB="$OPENSSL_OUTPUT_ROOT/lib"
-
-BUILD_ROOT="$ROOT_DIR/build/third_party/source-build"
-BUILD_INFO_FILE="$LIBSSH2_OUTPUT_ROOT/BUILD-INFO.txt"
-
-mkdir -p "$SOURCE_ROOT" "$LIBSSH2_OUTPUT_INCLUDE" "$LIBSSH2_OUTPUT_LIB" "$OPENSSL_OUTPUT_INCLUDE" "$OPENSSL_OUTPUT_LIB"
-
 normalize_arch() {
   case "$1" in
     arm64|aarch64) echo "arm64" ;;
@@ -50,6 +37,25 @@ case "$ARCH_OVERRIDE_VALUE" in
     ;;
 esac
 
+OUTPUT_SUFFIX="$ARCH_OVERRIDE_VALUE"
+LIBSSH2_OUTPUT_ROOT="$ROOT_DIR/build/third_party/libssh2-$OUTPUT_SUFFIX"
+LIBSSH2_OUTPUT_INCLUDE="$LIBSSH2_OUTPUT_ROOT/include"
+LIBSSH2_OUTPUT_LIB="$LIBSSH2_OUTPUT_ROOT/lib"
+
+OPENSSL_OUTPUT_ROOT="$ROOT_DIR/build/third_party/openssl-$OUTPUT_SUFFIX"
+OPENSSL_OUTPUT_INCLUDE="$OPENSSL_OUTPUT_ROOT/include"
+OPENSSL_OUTPUT_LIB="$OPENSSL_OUTPUT_ROOT/lib"
+
+BUILD_ROOT="$ROOT_DIR/build/third_party/source-build-$OUTPUT_SUFFIX"
+BUILD_INFO_FILE="$LIBSSH2_OUTPUT_ROOT/BUILD-INFO.txt"
+
+USE_ROSETTA_FOR_X86=0
+if [[ "$ARCH_OVERRIDE_VALUE" == "x86_64" && "$(uname -m)" == "arm64" ]]; then
+  USE_ROSETTA_FOR_X86=1
+fi
+
+mkdir -p "$SOURCE_ROOT" "$LIBSSH2_OUTPUT_INCLUDE" "$LIBSSH2_OUTPUT_LIB" "$OPENSSL_OUTPUT_INCLUDE" "$OPENSSL_OUTPUT_LIB"
+
 ARCH_FINGERPRINT="$(IFS=,; echo "${ARCHES[*]}")"
 EXPECTED_FINGERPRINT="libssh2=${LIBSSH2_VERSION};openssl=${OPENSSL_VERSION};min=${MACOS_MIN_VERSION};archs=${ARCH_FINGERPRINT}"
 
@@ -58,6 +64,7 @@ have_cached_outputs() {
     grep -Fq "fingerprint=$EXPECTED_FINGERPRINT" "$BUILD_INFO_FILE" &&
     [[ -f "$LIBSSH2_OUTPUT_LIB/libssh2.a" ]] &&
     [[ -f "$OPENSSL_OUTPUT_LIB/libcrypto.a" ]] &&
+    [[ -f "$OPENSSL_OUTPUT_LIB/libssl.a" ]] &&
     [[ -d "$LIBSSH2_OUTPUT_INCLUDE" ]] &&
     [[ -d "$OPENSSL_OUTPUT_INCLUDE" ]]
 }
@@ -94,6 +101,27 @@ libssh2_host_for_arch() {
   esac
 }
 
+run_for_arch() {
+  local arch="$1"
+  shift
+
+  if [[ "$arch" == "x86_64" && "$USE_ROSETTA_FOR_X86" == "1" ]]; then
+    arch -x86_64 "$@"
+  else
+    "$@"
+  fi
+}
+
+run_logged() {
+  local log_file="$1"
+  shift
+  if ! "$@" >"$log_file" 2>&1; then
+    echo "Command failed. Full log: $log_file" >&2
+    cat "$log_file" >&2
+    exit 1
+  fi
+}
+
 build_openssl_arch() {
   local arch="$1"
   local arch_build_root="$BUILD_ROOT/openssl-$arch"
@@ -113,15 +141,16 @@ build_openssl_arch() {
   local configure_log="$arch_build_root/openssl-configure.log"
   local make_log="$arch_build_root/openssl-make.log"
   local install_log="$arch_build_root/openssl-install.log"
+
   pushd "$src_dir" >/dev/null
   run_logged "$configure_log" \
-    env \
+    run_for_arch "$arch" env \
     CC="cc -arch $arch" \
     CFLAGS="-mmacosx-version-min=${MACOS_MIN_VERSION}" \
     LDFLAGS="-mmacosx-version-min=${MACOS_MIN_VERSION}" \
     ./Configure "$openssl_target" no-shared no-tests "--prefix=$arch_build_root/install"
-  run_logged "$make_log" make -j"$(sysctl -n hw.ncpu)"
-  run_logged "$install_log" make install_sw
+  run_logged "$make_log" run_for_arch "$arch" make -j"$(sysctl -n hw.ncpu)"
+  run_logged "$install_log" run_for_arch "$arch" make install_sw
   popd >/dev/null
 }
 
@@ -143,9 +172,10 @@ build_libssh2_arch() {
   host="$(libssh2_host_for_arch "$arch")"
   local configure_log="$arch_build_root/libssh2-configure.log"
   local make_log="$arch_build_root/libssh2-make.log"
+
   pushd "$src_dir" >/dev/null
   run_logged "$configure_log" \
-    env \
+    run_for_arch "$arch" env \
     CC="cc -arch $arch" \
     ./configure \
       --host="$host" \
@@ -155,7 +185,7 @@ build_libssh2_arch() {
       CPPFLAGS="-I$OPENSSL_OUTPUT_INCLUDE" \
       CFLAGS="-O2 -arch $arch -mmacosx-version-min=${MACOS_MIN_VERSION}" \
       LDFLAGS="-L$OPENSSL_OUTPUT_LIB -arch $arch -mmacosx-version-min=${MACOS_MIN_VERSION}"
-  run_logged "$make_log" make -j"$(sysctl -n hw.ncpu)"
+  run_logged "$make_log" run_for_arch "$arch" make -j"$(sysctl -n hw.ncpu)"
   popd >/dev/null
 }
 
@@ -170,18 +200,50 @@ finalize_static_library() {
   fi
 }
 
-run_logged() {
-  local log_file="$1"
-  shift
-  if ! "$@" >"$log_file" 2>&1; then
-    echo "Command failed. Full log: $log_file" >&2
-    cat "$log_file" >&2
+verify_library_arch() {
+  local archive_path="$1"
+  local expected_arch="$2"
+  local arch_info
+
+  if [[ ! -f "$archive_path" ]]; then
+    echo "Missing archive for architecture verification: $archive_path" >&2
     exit 1
   fi
+
+  arch_info="$(lipo -info "$archive_path" 2>&1 || true)"
+  if [[ -z "$arch_info" ]]; then
+    arch_info="$(file "$archive_path" 2>&1 || true)"
+  fi
+
+  case "$expected_arch" in
+    arm64)
+      if [[ "$arch_info" != *"arm64"* || "$arch_info" == *"x86_64"* ]]; then
+        echo "Architecture verification failed for $archive_path. Expected arm64-only archive, got: $arch_info" >&2
+        exit 1
+      fi
+      ;;
+    x86_64)
+      if [[ "$arch_info" != *"x86_64"* || "$arch_info" == *"arm64"* ]]; then
+        echo "Architecture verification failed for $archive_path. Expected x86_64-only archive, got: $arch_info" >&2
+        exit 1
+      fi
+      ;;
+    universal)
+      if [[ "$arch_info" != *"arm64"* || "$arch_info" != *"x86_64"* ]]; then
+        echo "Architecture verification failed for $archive_path. Expected universal archive with arm64 and x86_64, got: $arch_info" >&2
+        exit 1
+      fi
+      ;;
+    *)
+      echo "Unsupported expected architecture for verification: $expected_arch" >&2
+      exit 1
+      ;;
+  esac
 }
 
 if have_cached_outputs; then
   echo "Using cached OpenSSL/libssh2 artifacts for: $EXPECTED_FINGERPRINT"
+  echo "Prepared OpenSSL artifacts in: $OPENSSL_OUTPUT_ROOT"
   echo "Prepared libssh2 artifacts in: $LIBSSH2_OUTPUT_ROOT"
   exit 0
 fi
@@ -208,6 +270,8 @@ for arch in "${ARCHES[@]}"; do
 done
 finalize_static_library "$OPENSSL_OUTPUT_LIB/libcrypto.a" "${OPENSSL_CRYPTO_LIBS[@]}"
 finalize_static_library "$OPENSSL_OUTPUT_LIB/libssl.a" "${OPENSSL_SSL_LIBS[@]}"
+verify_library_arch "$OPENSSL_OUTPUT_LIB/libcrypto.a" "$ARCH_OVERRIDE_VALUE"
+verify_library_arch "$OPENSSL_OUTPUT_LIB/libssl.a" "$ARCH_OVERRIDE_VALUE"
 
 for arch in "${ARCHES[@]}"; do
   echo "Building libssh2 ($arch)..."
@@ -222,14 +286,15 @@ for arch in "${ARCHES[@]}"; do
   LIBSSH2_LIBS+=("$BUILD_ROOT/libssh2-$arch/libssh2-$LIBSSH2_VERSION/src/.libs/libssh2.a")
 done
 finalize_static_library "$LIBSSH2_OUTPUT_LIB/libssh2.a" "${LIBSSH2_LIBS[@]}"
+verify_library_arch "$LIBSSH2_OUTPUT_LIB/libssh2.a" "$ARCH_OVERRIDE_VALUE"
 
-cat > "$BUILD_INFO_FILE" <<EOF
+cat > "$BUILD_INFO_FILE" <<EOF2
 libssh2 build info
 fingerprint=$EXPECTED_FINGERPRINT
 generated=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 openssl_tarball=$OPENSSL_TARBALL
 libssh2_tarball=$LIBSSH2_TARBALL
-EOF
+EOF2
 
 echo "Prepared OpenSSL artifacts in: $OPENSSL_OUTPUT_ROOT"
 echo "Prepared libssh2 artifacts in: $LIBSSH2_OUTPUT_ROOT"

@@ -4,23 +4,29 @@ set -euo pipefail
 # scripts/release.sh
 # Run from repo root: ./scripts/release.sh
 #
+# ARCH_OVERRIDE supports arm64|x86_64|both|universal.
+# Build both arch apps: ARCH_OVERRIDE=both CONFIGURATION=Release ./scripts/build.sh
+# Dry-run dual-arch release: ARCH_OVERRIDE=both ./scripts/release.sh --dry-run
+#
 # Flow:
 # - require clean git working tree
 # - optional dry-run mode (--dry-run / -n): print actions only, no release side effects
 # - resolve base version from max(VERSION, latest vX.Y.Z tag)
 # - bump patch version
 # - build app bundle (Release by default)
-# - create DMG from build/macfuseGui.app
+# - create DMG(s) from build output app bundle(s)
 # - write VERSION and commit only VERSION
 # - create/push git tag and push commit+tag atomically
-# - create/update GitHub Release and upload DMG
-# - remove local DMG
+# - create/update GitHub Release and upload DMG asset(s)
+# - remove local DMG(s)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 VERSION_FILE="$REPO_ROOT/VERSION"
 APP_BUNDLE_PATH="$REPO_ROOT/build/macfuseGui.app"
+APP_BUNDLE_ARM64_PATH="$REPO_ROOT/build/macfuseGui-arm64.app"
+APP_BUNDLE_X86_64_PATH="$REPO_ROOT/build/macfuseGui-x86_64.app"
 VOLNAME="macfuseGui"
 
 CONFIGURATION="${CONFIGURATION:-Release}"
@@ -30,8 +36,9 @@ CODE_SIGNING_ALLOWED="${CODE_SIGNING_ALLOWED:-NO}"
 RELEASE_VERSION="${RELEASE_VERSION:-}"
 DRY_RUN=0
 
-DMG_PATH=""
-CREATED_DMG=0
+ARCH_OVERRIDE_NORMALIZED=""
+DMG_PATHS=()
+CREATED_DMG_PATHS=()
 
 RELEASE_NOTES=$'Unsigned macOS build (NOT code signed / NOT notarized)\n\nmacOS will likely block it on first launch.\n\nHow to open:\n1) Download the DMG, drag the app to Applications.\n2) In Finder, right-click the app -> Open -> Open.\nOr: System Settings -> Privacy & Security -> Open Anyway (after the first block).'
 
@@ -45,20 +52,33 @@ require_cmd() {
 }
 
 cleanup() {
-  if [[ "$CREATED_DMG" == "1" && -n "$DMG_PATH" && -f "$DMG_PATH" ]]; then
-    rm -f "$DMG_PATH"
-  fi
+  local dmg
+  for dmg in "${CREATED_DMG_PATHS[@]}"; do
+    if [[ -n "$dmg" && -f "$dmg" ]]; then
+      rm -f "$dmg"
+    fi
+  done
 }
 trap cleanup EXIT
 
 print_usage() {
-  cat <<'EOF'
+  cat <<'EOF2'
 Usage: ./scripts/release.sh [--dry-run|-n]
 
 Options:
   --dry-run, -n   Print release actions without changing git state or publishing to GitHub.
   --help, -h      Show this help.
-EOF
+EOF2
+}
+
+normalize_arch() {
+  case "$1" in
+    arm64|aarch64) echo "arm64" ;;
+    x86_64|amd64) echo "x86_64" ;;
+    all|universal) echo "universal" ;;
+    both) echo "both" ;;
+    *) echo "$1" ;;
+  esac
 }
 
 parse_args() {
@@ -148,6 +168,15 @@ main() {
     require_cmd gh
   fi
 
+  ARCH_OVERRIDE_NORMALIZED="$(normalize_arch "$ARCH_OVERRIDE")"
+  case "$ARCH_OVERRIDE_NORMALIZED" in
+    arm64|x86_64|both|universal)
+      ;;
+    *)
+      die "Unsupported ARCH_OVERRIDE value: $ARCH_OVERRIDE (expected arm64, x86_64, both, or universal)"
+      ;;
+  esac
+
   cd "$REPO_ROOT"
 
   git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "Not in a git repo"
@@ -201,7 +230,6 @@ main() {
     new_version="$(bump_patch "$base_version")"
   fi
   local tag="v${new_version}"
-  DMG_PATH="$REPO_ROOT/macfuseGui-${tag}-macos.dmg"
 
   if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null 2>&1; then
     die "Tag already exists locally: $tag"
@@ -210,38 +238,62 @@ main() {
     die "Tag already exists on origin: $tag"
   fi
 
+  local app_bundle_paths=()
+  local resolved_app_bundle_paths=()
+
+  if [[ "$ARCH_OVERRIDE_NORMALIZED" == "both" ]]; then
+    app_bundle_paths=(
+      "$APP_BUNDLE_ARM64_PATH"
+      "$APP_BUNDLE_X86_64_PATH"
+    )
+    DMG_PATHS=(
+      "$REPO_ROOT/macfuseGui-${tag}-macos-arm64.dmg"
+      "$REPO_ROOT/macfuseGui-${tag}-macos-x86_64.dmg"
+    )
+  else
+    app_bundle_paths=("$APP_BUNDLE_PATH")
+    DMG_PATHS=("$REPO_ROOT/macfuseGui-${tag}-macos.dmg")
+  fi
+
+  resolved_app_bundle_paths=("${app_bundle_paths[@]}")
+
   echo "Repo root:        $REPO_ROOT"
   echo "Git branch:       $branch"
   echo "Base version:     $base_version"
   echo "New version:      $new_version"
   echo "Tag:              $tag"
   echo "Configuration:    $CONFIGURATION"
-  echo "Arch override:    $ARCH_OVERRIDE"
+  echo "Arch override:    $ARCH_OVERRIDE_NORMALIZED"
   echo "Build skipped:    $SKIP_BUILD"
-  echo "DMG path:         $DMG_PATH"
+  local dmg_path
+  for dmg_path in "${DMG_PATHS[@]}"; do
+    echo "DMG path:         $dmg_path"
+  done
   echo "Dry run:          $DRY_RUN"
 
-  local resolved_app_bundle_path="$APP_BUNDLE_PATH"
   if [[ "$DRY_RUN" == "1" ]]; then
     if [[ "$SKIP_BUILD" != "1" ]]; then
-      echo "[dry-run] Would run build: CONFIGURATION=$CONFIGURATION ARCH_OVERRIDE=$ARCH_OVERRIDE CODE_SIGNING_ALLOWED=$CODE_SIGNING_ALLOWED $REPO_ROOT/scripts/build.sh"
+      echo "[dry-run] Would run build: CONFIGURATION=$CONFIGURATION ARCH_OVERRIDE=$ARCH_OVERRIDE_NORMALIZED CODE_SIGNING_ALLOWED=$CODE_SIGNING_ALLOWED $REPO_ROOT/scripts/build.sh"
     else
       echo "[dry-run] Build step skipped (SKIP_BUILD=1)."
     fi
-    echo "[dry-run] Would use app bundle path: $resolved_app_bundle_path"
+    local app_path
+    for app_path in "${resolved_app_bundle_paths[@]}"; do
+      echo "[dry-run] Would use app bundle path: $app_path"
+      echo "[dry-run] Would validate app bundle exists: $app_path"
+    done
   elif [[ "$SKIP_BUILD" != "1" ]]; then
     local build_log
     build_log="$(mktemp -t macfusegui-release-build.XXXXXX)"
 
     if ! CONFIGURATION="$CONFIGURATION" \
-      ARCH_OVERRIDE="$ARCH_OVERRIDE" \
+      ARCH_OVERRIDE="$ARCH_OVERRIDE_NORMALIZED" \
       CODE_SIGNING_ALLOWED="$CODE_SIGNING_ALLOWED" \
       "$REPO_ROOT/scripts/build.sh" 2>&1 | tee "$build_log"; then
       rm -f "$build_log"
       die "Build failed."
     fi
 
-    # Prefer the explicit path reported by build.sh ("Built: <path>") when available.
     local reported_app_path
     reported_app_path="$(awk '
       /^Built: / {
@@ -252,39 +304,61 @@ main() {
     ' "$build_log")"
     rm -f "$build_log"
 
-    if [[ -n "$reported_app_path" && -d "$reported_app_path" ]]; then
-      resolved_app_bundle_path="$reported_app_path"
+    if [[ "$ARCH_OVERRIDE_NORMALIZED" == "both" ]]; then
+      local required_path
+      for required_path in "${app_bundle_paths[@]}"; do
+        if [[ ! -d "$required_path" ]]; then
+          die "Expected app bundle not found after dual-arch build: $required_path"
+        fi
+      done
+      resolved_app_bundle_paths=("${app_bundle_paths[@]}")
+    elif [[ -n "$reported_app_path" && -d "$reported_app_path" ]]; then
+      resolved_app_bundle_paths=("$reported_app_path")
     fi
   fi
 
   if [[ "$DRY_RUN" == "1" ]]; then
-    echo "[dry-run] Using app bundle: $resolved_app_bundle_path"
-    echo "[dry-run] Would validate app bundle exists: $resolved_app_bundle_path"
-    echo "[dry-run] Would create DMG: hdiutil create -volname \"$VOLNAME\" -srcfolder \"$resolved_app_bundle_path\" -ov -format UDZO \"$DMG_PATH\""
+    local i
+    for i in "${!resolved_app_bundle_paths[@]}"; do
+      echo "[dry-run] Would create DMG: hdiutil create -volname \"$VOLNAME\" -srcfolder \"${resolved_app_bundle_paths[$i]}\" -ov -format UDZO \"${DMG_PATHS[$i]}\""
+    done
     echo "[dry-run] Would write VERSION=$new_version and commit: Release ${tag}"
     echo "[dry-run] Would create tag: $tag"
     echo "[dry-run] Would push atomically: git push --atomic origin \"$branch\" \"$tag\""
-    echo "[dry-run] Would create/update GitHub release and upload: $DMG_PATH"
+    echo "[dry-run] Would create/update GitHub release and upload: ${DMG_PATHS[*]}"
   else
-    [[ -d "$resolved_app_bundle_path" ]] || die "App bundle not found at: $resolved_app_bundle_path"
+    local app_path
+    for app_path in "${resolved_app_bundle_paths[@]}"; do
+      [[ -d "$app_path" ]] || die "App bundle not found at: $app_path"
+    done
+
     # Staleness guard is only meaningful when reusing an existing build.
     if [[ "$SKIP_BUILD" == "1" ]]; then
-      local app_mtime
       local head_time
-      app_mtime="$(bundle_newest_mtime "$resolved_app_bundle_path")"
       head_time="$(git log -1 --format=%ct)"
-      if [[ "$app_mtime" -lt "$head_time" ]]; then
-        die "App bundle payload looks older than HEAD commit. Rebuild or set SKIP_BUILD=0."
-      fi
+      for app_path in "${resolved_app_bundle_paths[@]}"; do
+        local app_mtime
+        app_mtime="$(bundle_newest_mtime "$app_path")"
+        if [[ "$app_mtime" -lt "$head_time" ]]; then
+          die "App bundle payload looks older than HEAD commit. Rebuild or set SKIP_BUILD=0."
+        fi
+      done
     fi
 
-    echo "Using app bundle: $resolved_app_bundle_path"
-    rm -f "$DMG_PATH"
-    hdiutil create -volname "$VOLNAME" -srcfolder "$resolved_app_bundle_path" -ov -format UDZO "$DMG_PATH"
-    if ! hdiutil verify "$DMG_PATH" >/dev/null 2>&1; then
-      die "DMG verification failed: $DMG_PATH"
-    fi
-    CREATED_DMG=1
+    local i
+    for i in "${!resolved_app_bundle_paths[@]}"; do
+      local current_app_path current_dmg_path
+      current_app_path="${resolved_app_bundle_paths[$i]}"
+      current_dmg_path="${DMG_PATHS[$i]}"
+
+      echo "Using app bundle: $current_app_path"
+      rm -f "$current_dmg_path"
+      hdiutil create -volname "$VOLNAME" -srcfolder "$current_app_path" -ov -format UDZO "$current_dmg_path"
+      if ! hdiutil verify "$current_dmg_path" >/dev/null 2>&1; then
+        die "DMG verification failed: $current_dmg_path"
+      fi
+      CREATED_DMG_PATHS+=("$current_dmg_path")
+    done
 
     printf '%s\n' "$new_version" > "$VERSION_FILE"
     git add -- "$VERSION_FILE"
@@ -298,15 +372,16 @@ main() {
     git push --atomic origin "$branch" "$tag"
 
     if gh release view "$tag" >/dev/null 2>&1; then
-      gh release upload "$tag" "$DMG_PATH" --clobber
+      gh release upload "$tag" "${DMG_PATHS[@]}" --clobber
       gh release edit "$tag" --title "$tag" --notes "$RELEASE_NOTES"
     else
-      gh release create "$tag" "$DMG_PATH" --verify-tag --title "$tag" --notes "$RELEASE_NOTES"
+      gh release create "$tag" "${DMG_PATHS[@]}" --verify-tag --title "$tag" --notes "$RELEASE_NOTES"
     fi
 
-    rm -f "$DMG_PATH"
-    DMG_PATH=""
-    CREATED_DMG=0
+    for dmg_path in "${DMG_PATHS[@]}"; do
+      rm -f "$dmg_path"
+    done
+    CREATED_DMG_PATHS=()
   fi
 
   if [[ "$DRY_RUN" == "1" ]]; then
