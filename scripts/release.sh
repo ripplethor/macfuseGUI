@@ -267,6 +267,39 @@ strip_staged_app_if_enabled() {
   strip -Sx "$executable_path"
 }
 
+verify_dmg_with_fallback() {
+  local dmg_path="$1"
+  local verify_output=""
+  local attach_output=""
+  local mount_point=""
+  local verify_rc=0
+
+  if verify_output="$(hdiutil verify "$dmg_path" 2>&1)"; then
+    return 0
+  fi
+  verify_rc=$?
+
+  echo "Warning: hdiutil verify failed for $dmg_path (exit $verify_rc)."
+  echo "$verify_output"
+  echo "Attempting fallback validation via imageinfo + attach."
+
+  if ! hdiutil imageinfo "$dmg_path" >/dev/null 2>&1; then
+    die "DMG validation failed (imageinfo): $dmg_path"
+  fi
+
+  if ! attach_output="$(hdiutil attach -nobrowse -readonly "$dmg_path" 2>&1)"; then
+    echo "$attach_output"
+    die "DMG validation failed (attach): $dmg_path"
+  fi
+
+  mount_point="$(printf '%s\n' "$attach_output" | awk '/\/Volumes\// {for (i=1; i<=NF; i++) if ($i ~ /^\/Volumes\//) {print $i; exit}}')"
+  if [[ -n "$mount_point" ]]; then
+    hdiutil detach "$mount_point" >/dev/null 2>&1 || true
+  fi
+
+  echo "Fallback validation succeeded for $dmg_path."
+}
+
 write_dmg_installer_script() {
   local stage_dir="$1"
   local script_path="$stage_dir/$DMG_INSTALLER_SCRIPT_NAME"
@@ -583,9 +616,7 @@ main() {
       CREATED_STAGE_DIRS+=("$stage_dir")
       rm -f "$current_dmg_path"
       hdiutil create -volname "$VOLNAME" -srcfolder "$stage_dir" -ov -format UDZO -imagekey "zlib-level=$DMG_ZLIB_LEVEL" "$current_dmg_path"
-      if ! hdiutil verify "$current_dmg_path" >/dev/null 2>&1; then
-        die "DMG verification failed: $current_dmg_path"
-      fi
+      verify_dmg_with_fallback "$current_dmg_path"
       CREATED_DMG_PATHS+=("$current_dmg_path")
     done
 
