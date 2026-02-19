@@ -32,6 +32,7 @@ VOLNAME="macfuseGui"
 DMG_APP_BUNDLE_NAME="macFUSEGui.app"
 DMG_APPLICATIONS_LINK_NAME="Applications"
 DMG_INSTALLER_SCRIPT_NAME="Install macFUSEGui.command"
+DMG_TERMINAL_HELP_NAME="INSTALL_IN_TERMINAL.txt"
 DMG_ZLIB_LEVEL="${DMG_ZLIB_LEVEL:-9}"
 STRIP_DMG_PAYLOAD="${STRIP_DMG_PAYLOAD:-1}"
 
@@ -48,7 +49,7 @@ CREATED_DMG_PATHS=()
 CREATED_STAGE_DIRS=()
 CREATED_NOTES_FILE=""
 
-RELEASE_NOTES=$'Unsigned macOS build (NOT code signed / NOT notarized)\n\nmacOS may block first launch.\n\nRecommended install path:\n1) Open the DMG.\n2) Run "Install macFUSEGui.command" from the DMG.\n3) The installer copies the app to /Applications, clears quarantine, and opens it.\n\nManual fallback:\n1) Drag the app to Applications.\n2) In Finder, right-click the app -> Open -> Open.\nOr: System Settings -> Privacy & Security -> Open Anyway (after the first block).'
+RELEASE_NOTES=$'Unsigned macOS build (NOT code signed / NOT notarized)\n\nmacOS may block first launch.\n\nRecommended install path:\n1) Open the DMG.\n2) Open Terminal.\n3) Run: /bin/bash "/Volumes/macfuseGui/Install macFUSEGui.command"\n4) The installer copies the app to /Applications, clears quarantine, and opens it.\n\nIf Finder blocks the app anyway, use the direct command shown in INSTALL_IN_TERMINAL.txt inside the DMG.'
 
 generate_changelog() {
   local previous_tag="$1"
@@ -308,6 +309,24 @@ EOF_INSTALLER
   chmod +x "$script_path"
 }
 
+write_dmg_terminal_install_help() {
+  local stage_dir="$1"
+  local help_path="$stage_dir/$DMG_TERMINAL_HELP_NAME"
+  local direct_install_cmd
+  direct_install_cmd="sudo rm -rf \"/Applications/$DMG_APP_BUNDLE_NAME\" && sudo ditto \"/Volumes/$VOLNAME/$DMG_APP_BUNDLE_NAME\" \"/Applications/$DMG_APP_BUNDLE_NAME\" && sudo xattr -dr com.apple.quarantine \"/Applications/$DMG_APP_BUNDLE_NAME\" && open \"/Applications/$DMG_APP_BUNDLE_NAME\""
+
+  cat > "$help_path" <<EOF_HELP
+If Finder blocks double-click launch, install from Terminal:
+
+1) Open Terminal
+2) Run:
+/bin/bash "/Volumes/$VOLNAME/$DMG_INSTALLER_SCRIPT_NAME"
+
+If that is also blocked, run this direct fallback command:
+$direct_install_cmd
+EOF_HELP
+}
+
 ad_hoc_sign_staged_app_if_needed() {
   local staged_app_path="$1"
 
@@ -512,6 +531,7 @@ main() {
       echo "[dry-run] Would stage app bundle as \"$DMG_APP_BUNDLE_NAME\" for DMG payload."
       echo "[dry-run] Would create /Applications symlink in DMG payload."
       echo "[dry-run] Would add installer helper script: $DMG_INSTALLER_SCRIPT_NAME"
+      echo "[dry-run] Would add Terminal install help file: $DMG_TERMINAL_HELP_NAME"
       if [[ "$STRIP_DMG_PAYLOAD" == "1" && "$CODE_SIGNING_ALLOWED" != "YES" ]]; then
         echo "[dry-run] Would strip staged app executable symbols before DMG create."
       fi
@@ -557,6 +577,7 @@ main() {
       ditto "$current_app_path" "$staged_app_path"
       ln -s /Applications "$stage_dir/$DMG_APPLICATIONS_LINK_NAME"
       write_dmg_installer_script "$stage_dir"
+      write_dmg_terminal_install_help "$stage_dir"
       strip_staged_app_if_enabled "$staged_app_path"
       ad_hoc_sign_staged_app_if_needed "$staged_app_path"
       CREATED_STAGE_DIRS+=("$stage_dir")
