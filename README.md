@@ -38,6 +38,13 @@ brew install --cask macfuse
 brew install gromgit/fuse/sshfs-mac
 ```
 
+## Install via Homebrew (App)
+
+```bash
+brew tap ripplethor/macfusegui https://github.com/ripplethor/macfuseGUI
+brew install --cask ripplethor/macfusegui/macfusegui
+```
+
 Expected `sshfs` search order:
 1. `/opt/homebrew/bin/sshfs`
 2. `/usr/local/bin/sshfs`

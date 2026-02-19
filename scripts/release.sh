@@ -28,6 +28,7 @@ VERSION_FILE="$REPO_ROOT/VERSION"
 APP_BUNDLE_PATH="$REPO_ROOT/build/macfuseGui.app"
 APP_BUNDLE_ARM64_PATH="$REPO_ROOT/build/macfuseGui-arm64.app"
 APP_BUNDLE_X86_64_PATH="$REPO_ROOT/build/macfuseGui-x86_64.app"
+CASK_PATH="$REPO_ROOT/Casks/macfusegui.rb"
 VOLNAME="macfuseGui"
 DMG_APP_BUNDLE_NAME="macFUSEGui.app"
 DMG_APPLICATIONS_LINK_NAME="Applications"
@@ -35,6 +36,7 @@ DMG_INSTALLER_SCRIPT_NAME="Install macFUSEGui.command"
 DMG_TERMINAL_HELP_NAME="INSTALL_IN_TERMINAL.txt"
 DMG_ZLIB_LEVEL="${DMG_ZLIB_LEVEL:-9}"
 STRIP_DMG_PAYLOAD="${STRIP_DMG_PAYLOAD:-1}"
+UPDATE_HOMEBREW_CASK="${UPDATE_HOMEBREW_CASK:-1}"
 
 CONFIGURATION="${CONFIGURATION:-Release}"
 ARCH_OVERRIDE="${ARCH_OVERRIDE:-both}"
@@ -49,7 +51,39 @@ CREATED_DMG_PATHS=()
 CREATED_STAGE_DIRS=()
 CREATED_NOTES_FILE=""
 
-RELEASE_NOTES=$'Unsigned macOS build (NOT code signed / NOT notarized)\n\nmacOS may block first launch.\n\nRecommended install path (Terminal installer):\n```bash\n/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/ripplethor/macfuseGUI/main/scripts/install_release.sh)"\n```\n\nDMG fallback:\n1) Open the DMG.\n2) Open Terminal.\n3) Run: /bin/bash "/Volumes/macfuseGui/Install macFUSEGui.command"\n4) The installer copies the app to /Applications, clears quarantine, and opens it.\n\nIf Finder blocks the app anyway, use the direct command shown in INSTALL_IN_TERMINAL.txt inside the DMG.'
+RELEASE_NOTES=$'Unsigned macOS build (NOT code signed / NOT notarized)\n\nmacOS may block first launch.\n\nRecommended install path (Terminal installer):\n```bash\n/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/ripplethor/macfuseGUI/main/scripts/install_release.sh)"\n```\n\nHomebrew install (tap + cask):\n```bash\nbrew tap ripplethor/macfusegui https://github.com/ripplethor/macfuseGUI\nbrew install --cask ripplethor/macfusegui/macfusegui\n```\n\nDMG fallback:\n1) Open the DMG.\n2) Open Terminal.\n3) Run: /bin/bash "/Volumes/macfuseGui/Install macFUSEGui.command"\n4) The installer copies the app to /Applications, clears quarantine, and opens it.\n\nIf Finder blocks the app anyway, use the direct command shown in INSTALL_IN_TERMINAL.txt inside the DMG.'
+
+write_homebrew_cask() {
+  local version="$1"
+  local arm_sha="$2"
+  local intel_sha="$3"
+
+  mkdir -p "$(dirname "$CASK_PATH")"
+  cat > "$CASK_PATH" <<EOF_CASK
+cask "macfusegui" do
+  arch arm: "arm64", intel: "x86_64"
+
+  version "$version"
+  sha256 arm: "$arm_sha", intel: "$intel_sha"
+
+  url "https://github.com/ripplethor/macfuseGUI/releases/download/v#{version}/macfuseGui-v#{version}-macos-#{arch}.dmg",
+      verified: "github.com/ripplethor/macfuseGUI/"
+  name "macfuseGui"
+  desc "SSHFS GUI for macOS using macFUSE"
+  homepage "https://www.macfusegui.app/"
+
+  depends_on macos: ">= :ventura"
+
+  app "macFUSEGui.app"
+
+  caveats <<~EOS
+    This app is unsigned and not notarized.
+    If macOS blocks launch, run:
+      xattr -dr com.apple.quarantine "/Applications/macFUSEGui.app"
+  EOS
+end
+EOF_CASK
+}
 
 generate_changelog() {
   local previous_tag="$1"
@@ -380,6 +414,7 @@ main() {
   require_cmd ditto
   require_cmd hdiutil
   require_cmd codesign
+  require_cmd shasum
   if [[ "$DRY_RUN" != "1" ]]; then
     require_cmd gh
   fi
@@ -506,6 +541,8 @@ main() {
   echo "Build skipped:    $SKIP_BUILD"
   echo "DMG zlib level:   $DMG_ZLIB_LEVEL"
   echo "Strip DMG app:    $STRIP_DMG_PAYLOAD"
+  echo "Update cask:      $UPDATE_HOMEBREW_CASK"
+  echo "Cask path:        $CASK_PATH"
   local dmg_path
   for dmg_path in "${DMG_PATHS[@]}"; do
     echo "DMG path:         $dmg_path"
@@ -573,6 +610,15 @@ main() {
       fi
       echo "[dry-run] Would create DMG: hdiutil create -volname \"$VOLNAME\" -srcfolder \"<staging>\" -ov -format UDZO -imagekey zlib-level=$DMG_ZLIB_LEVEL \"${DMG_PATHS[$i]}\""
     done
+    if [[ "$UPDATE_HOMEBREW_CASK" == "1" ]]; then
+      if [[ "$ARCH_OVERRIDE_NORMALIZED" == "both" ]]; then
+        echo "[dry-run] Would compute SHA256 for dual-arch DMGs and update Homebrew cask: $CASK_PATH"
+      else
+        echo "[dry-run] Would skip Homebrew cask update because ARCH_OVERRIDE=$ARCH_OVERRIDE_NORMALIZED (requires both)."
+      fi
+    else
+      echo "[dry-run] Homebrew cask update disabled (UPDATE_HOMEBREW_CASK=0)."
+    fi
     echo "[dry-run] Would write VERSION=$new_version and commit: Release ${tag}"
     echo "[dry-run] Would create tag: $tag"
     echo "[dry-run] Would push atomically: git push --atomic origin \"$branch\" \"$tag\""
@@ -620,8 +666,23 @@ main() {
       CREATED_DMG_PATHS+=("$current_dmg_path")
     done
 
+    if [[ "$UPDATE_HOMEBREW_CASK" == "1" ]]; then
+      if [[ "$ARCH_OVERRIDE_NORMALIZED" == "both" ]]; then
+        local arm_sha intel_sha
+        arm_sha="$(shasum -a 256 "${DMG_PATHS[0]}" | awk '{print $1}')"
+        intel_sha="$(shasum -a 256 "${DMG_PATHS[1]}" | awk '{print $1}')"
+        write_homebrew_cask "$new_version" "$arm_sha" "$intel_sha"
+        echo "Updated Homebrew cask: $CASK_PATH"
+      else
+        echo "Skipping Homebrew cask update because ARCH_OVERRIDE=$ARCH_OVERRIDE_NORMALIZED (requires both)."
+      fi
+    fi
+
     printf '%s\n' "$new_version" > "$VERSION_FILE"
     git add -- "$VERSION_FILE"
+    if [[ -f "$CASK_PATH" ]]; then
+      git add -- "$CASK_PATH"
+    fi
     if git diff --cached --quiet; then
       echo "VERSION unchanged; skipping release commit."
     else
