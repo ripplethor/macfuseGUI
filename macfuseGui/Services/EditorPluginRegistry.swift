@@ -25,6 +25,7 @@ final class EditorPluginRegistry: ObservableObject {
         return encoder
     }()
     private var catalog: [EditorPluginDefinition] = []
+    private var externalManifestFilesByID: [String: String] = [:]
 
     private let activationOverridesKey = "editor.plugins.activation_overrides"
     private let preferredPluginIDKey = "editor.plugins.preferred_id"
@@ -48,7 +49,10 @@ final class EditorPluginRegistry: ObservableObject {
         if let appSupportDirectoryURL {
             self.appSupportDirectoryURL = appSupportDirectoryURL
         } else {
-            self.appSupportDirectoryURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            // Defensive fallback: FileManager should return a user Application Support URL, but if it doesn't
+            // (rare OS/environment edge case), we avoid crashing and fall back to the conventional path.
+            self.appSupportDirectoryURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+                ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
         }
 
         reloadCatalog()
@@ -59,11 +63,15 @@ final class EditorPluginRegistry: ObservableObject {
         var issues: [EditorPluginLoadIssue] = []
         let builtIns = builtInCatalog(issues: &issues)
         preparePluginsDirectoryScaffold(builtIns: builtIns, issues: &issues)
+        let loadedExternal = loadExternalPlugins(issues: &issues)
+        // Cache manifest filename by plugin ID so later lookups do not re-scan and decode every JSON file.
+        // Call reloadCatalog() to refresh this map after external plugin files change.
+        externalManifestFilesByID = Dictionary(uniqueKeysWithValues: loadedExternal.map { ($0.plugin.id, $0.file) })
         var mergedByID: [String: EditorPluginDefinition] = Dictionary(
             uniqueKeysWithValues: builtIns.map { ($0.id, $0) }
         )
 
-        for loaded in loadExternalPlugins(issues: &issues) {
+        for loaded in loadedExternal {
             if mergedByID[loaded.plugin.id] != nil {
                 issues.append(
                     EditorPluginLoadIssue(
@@ -332,36 +340,11 @@ final class EditorPluginRegistry: ObservableObject {
     }
 
     private func externalManifestURL(for pluginID: String) -> URL? {
-        guard fileManager.fileExists(atPath: pluginsDirectoryURL.path) else {
+        let normalized = pluginID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard let manifestFile = externalManifestFilesByID[normalized] else {
             return nil
         }
-
-        let candidateFiles: [URL]
-        do {
-            candidateFiles = try fileManager
-                .contentsOfDirectory(
-                    at: pluginsDirectoryURL,
-                    includingPropertiesForKeys: nil,
-                    options: [.skipsHiddenFiles]
-                )
-                .filter { $0.pathExtension.lowercased() == "json" }
-        } catch {
-            return nil
-        }
-
-        for fileURL in candidateFiles {
-            guard let data = try? Data(contentsOf: fileURL),
-                  let manifest = try? decoder.decode(ExternalPluginManifest.self, from: data) else {
-                continue
-            }
-
-            let manifestID = manifest.id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            if manifestID == pluginID {
-                return fileURL
-            }
-        }
-
-        return nil
+        return pluginsDirectoryURL.appendingPathComponent(manifestFile, isDirectory: false)
     }
 
     private func preparePluginsDirectoryScaffold(
@@ -599,6 +582,8 @@ final class EditorPluginRegistry: ObservableObject {
                 seenIDs.insert(validated.id)
                 plugins.append((fileURL.lastPathComponent, validated))
             } catch {
+                // By design: do not throw for one bad external manifest. We keep built-ins and other manifests usable
+                // and surface failures through loadIssues so users can see why a plugin was ignored.
                 issues.append(
                     EditorPluginLoadIssue(
                         file: fileURL.lastPathComponent,

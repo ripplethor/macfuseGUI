@@ -31,11 +31,14 @@ actor MountManager {
     private let mountInspectionCommandTimeout: TimeInterval = 1.5
     private let mountInspectionFallbackTimeout: TimeInterval = 1.5
     private let mountResponsivenessTimeout: TimeInterval = 1.5
-    private let sshfsConnectCommandTimeout: TimeInterval = 20
+    // Prevent indefinite "connected" false-positives when mount table parsing fails but local path still exists.
+    private let maxConnectedPreserveMisses = 2
+    private let sshfsConnectCommandTimeout: TimeInterval
     private let forceStopProcessListTimeout: TimeInterval = 3
 
     // Internal status cache so callers can ask current state without rerunning probes.
     private var statuses: [UUID: RemoteStatus] = [:]
+    private var connectedPreserveMisses: [UUID: Int] = [:]
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init(
@@ -45,7 +48,8 @@ actor MountManager {
         unmountService: UnmountService,
         mountStateParser: MountStateParser,
         diagnostics: DiagnosticsService,
-        commandBuilder: MountCommandBuilder
+        commandBuilder: MountCommandBuilder,
+        sshfsConnectCommandTimeout: TimeInterval = 20
     ) {
         self.runner = runner
         self.dependencyChecker = dependencyChecker
@@ -54,6 +58,7 @@ actor MountManager {
         self.mountStateParser = mountStateParser
         self.diagnostics = diagnostics
         self.commandBuilder = commandBuilder
+        self.sshfsConnectCommandTimeout = sshfsConnectCommandTimeout
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -87,29 +92,48 @@ actor MountManager {
             // Guard against single-pass probe misses: if we were connected, do a fast
             // confirmation pass before transitioning to disconnected/recovery states.
             if mountedRecord == nil, previousStatus.state == .connected {
-                if await isMountPathResponsive(remote.localMountPoint, remoteID: remote.id, operationID: operationID) {
-                    let preserved = RemoteStatus(
-                        state: .connected,
-                        mountedPath: previousStatus.mountedPath ?? normalizedMountPoint,
-                        lastError: nil,
-                        updatedAt: Date()
-                    )
-                    updateCachedStatus(preserved, for: remote.id)
-                    diagnostics.append(
-                        level: .debug,
-                        category: "mount",
-                        message: "Preserved connected state for \(remote.displayName) using responsive mount-path check."
-                    )
-                    return preserved
-                }
-
                 if let dfRecord = try await currentMountRecordViaDF(
                     for: normalizedMountPoint,
                     remoteID: remote.id,
                     operationID: operationID
                 ) {
                     mountedRecord = dfRecord
+                } else if await isMountPathResponsive(remote.localMountPoint, remoteID: remote.id, operationID: operationID) {
+                    let preserveMissCount = (connectedPreserveMisses[remote.id] ?? 0) + 1
+                    connectedPreserveMisses[remote.id] = preserveMissCount
+
+                    if preserveMissCount <= maxConnectedPreserveMisses {
+                        let preserved = RemoteStatus(
+                            state: .connected,
+                            mountedPath: previousStatus.mountedPath ?? normalizedMountPoint,
+                            lastError: nil,
+                            updatedAt: Date()
+                        )
+                        updateCachedStatus(preserved, for: remote.id)
+                        diagnostics.append(
+                            level: .debug,
+                            category: "mount",
+                            message: "Preserved connected state for \(remote.displayName) using responsive mount-path check (miss \(preserveMissCount)/\(maxConnectedPreserveMisses))."
+                        )
+                        return preserved
+                    }
+
+                    connectedPreserveMisses[remote.id] = 0
+                    diagnostics.append(
+                        level: .warning,
+                        category: "mount",
+                        message: "Mount path remained responsive but mount was not detected for \(remote.displayName) after \(preserveMissCount) checks. Forcing recovery."
+                    )
+                    let staleStatus = RemoteStatus(
+                        state: .error,
+                        mountedPath: nil,
+                        lastError: "Mount could not be verified. Reconnect will perform cleanup.",
+                        updatedAt: Date()
+                    )
+                    updateCachedStatus(staleStatus, for: remote.id)
+                    return staleStatus
                 } else {
+                    connectedPreserveMisses[remote.id] = 0
                     try? await Task.sleep(nanoseconds: 250_000_000)
                     mountedRecord = try await currentMountRecord(
                         for: remote.localMountPoint,
@@ -120,6 +144,7 @@ actor MountManager {
             }
 
             if let mountedRecord {
+                connectedPreserveMisses[remote.id] = 0
                 // Extra health probe: a mount can exist but be stale/hung.
                 let health = try await runner.run(
                     executable: "/usr/bin/stat",
@@ -152,6 +177,7 @@ actor MountManager {
                 return connected
             }
 
+            connectedPreserveMisses[remote.id] = 0
             let disconnected = RemoteStatus(state: .disconnected, updatedAt: Date())
             updateCachedStatus(disconnected, for: remote.id)
             return disconnected
@@ -171,16 +197,21 @@ actor MountManager {
                     // Only preserve connected when the mounted path is still immediately
                     // responsive. If it is not responsive, force recovery to reconnect.
                     if await isMountPathResponsive(remote.localMountPoint, remoteID: remote.id, operationID: operationID) {
-                        let preserved = RemoteStatus(
-                            state: .connected,
-                            mountedPath: previous.mountedPath,
-                            lastError: nil,
-                            updatedAt: Date()
-                        )
-                        updateCachedStatus(preserved, for: remote.id)
-                        return preserved
+                        let preserveMissCount = (connectedPreserveMisses[remote.id] ?? 0) + 1
+                        connectedPreserveMisses[remote.id] = preserveMissCount
+                        if preserveMissCount <= maxConnectedPreserveMisses {
+                            let preserved = RemoteStatus(
+                                state: .connected,
+                                mountedPath: previous.mountedPath,
+                                lastError: nil,
+                                updatedAt: Date()
+                            )
+                            updateCachedStatus(preserved, for: remote.id)
+                            return preserved
+                        }
                     }
 
+                    connectedPreserveMisses[remote.id] = 0
                     let staleStatus = RemoteStatus(
                         state: .error,
                         mountedPath: nil,
@@ -197,6 +228,7 @@ actor MountManager {
                     lastError: nil,
                     updatedAt: Date()
                 )
+                connectedPreserveMisses[remote.id] = 0
                 updateCachedStatus(disconnected, for: remote.id)
                 return disconnected
             }
@@ -368,6 +400,8 @@ actor MountManager {
 
             if stillMounted {
                 // Best-effort cleanup so failed tests do not leave mounted artifacts.
+                // Cleanup can fail if macOS is mid-transition or the mount already disappeared.
+                // We intentionally ignore cleanup errors here so the original failure is preserved.
                 try? await unmountService.unmount(mountPoint: remote.localMountPoint)
                 try? await waitForUnmount(mountPoint: remote.localMountPoint, timeoutSeconds: 6)
             }
@@ -493,6 +527,8 @@ actor MountManager {
 
                     for signal in ["-TERM", "-KILL"] {
                         for pid in pids {
+                            // Best-effort: sshfs may exit between ps and kill, or permissions may block the signal.
+                            // We intentionally ignore kill failures and still attempt force-unmount next.
                             _ = try? await runner.run(
                                 executable: "/bin/kill",
                                 arguments: [signal, String(pid)],
@@ -596,6 +632,8 @@ actor MountManager {
                 if shouldRetry && attempt < 2 {
                     // Retry once after cleanup for transient transport/mount handoff failures.
                     diagnostics.append(level: .warning, category: "mount", message: "Retrying mount for \(remote.displayName) after cleanup.")
+                    // Cleanup is best-effort. If it fails, the next attempt will still run and will likely
+                    // return a clearer mount error. We do not fail the retry solely due to cleanup.
                     try? await unmountService.unmount(mountPoint: remote.localMountPoint)
                     try? ensureLocalMountPointReady(remote.localMountPoint)
                     continue

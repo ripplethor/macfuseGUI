@@ -10,6 +10,7 @@
 		0954232ABBBE1E79AD928C08 /* ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3946211003B1FB7FCB040BDF /* ProcessRunner.swift */; };
 		103A7C95077E922349BC6533 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D46D6D34DC8DC231BA9AFF78 /* KeychainService.swift */; };
 		10C10B21DCDEC2AD88223A8E /* AppError.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5C3E3B9C41A26A4B3756212 /* AppError.swift */; };
+		A4B5C6D7E8F90123456789A2 /* AppDelegateLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B5C6D7E8F90123456789A1 /* AppDelegateLifecycleTests.swift */; };
 		0AA1B2C3D4E5F60718293A41 /* EditorPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB1B2C3D4E5F60718293B41 /* EditorPlugin.swift */; };
 		0AA1B2C3D4E5F60718293A42 /* EditorPluginRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB1B2C3D4E5F60718293B42 /* EditorPluginRegistry.swift */; };
 		0AA1B2C3D4E5F60718293A43 /* EditorOpenService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB1B2C3D4E5F60718293B43 /* EditorOpenService.swift */; };
@@ -43,9 +44,11 @@
 		9BF77D70B94A2397034BF606 /* MountArgBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1CEF0B82125E597B943366 /* MountArgBuilderTests.swift */; };
 		9F340F05EAA5F5D44B6187B2 /* LibSSH2SessionActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DC9455185A25C4BD66699BD /* LibSSH2SessionActor.swift */; };
 		A1C3E5F7092B4D6F8A0C2E4A /* ProcessRunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D4F6081A3C5E7F9B1D3F5B /* ProcessRunnerTests.swift */; };
+		F1A2B3C4D5E6F708192A3B4C /* LaunchAtLoginServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F708192A3B4D /* LaunchAtLoginServiceTests.swift */; };
 		AE2E6207DCB2A8676E70F39E /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D93B3F2F6B952ABC56E126B5 /* MenuBarController.swift */; };
 		AF3682692F0C4028511D5C30 /* DependencyChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B675FE49225F98D782450A /* DependencyChecker.swift */; };
 		B3ECAB6B9206097A103F8D5A /* MountManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FFCCBA28584A224841831D5 /* MountManager.swift */; };
+		B4C5D6E7F809123456789AB2 /* MenuBarControllerFormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C5D6E7F809123456789AB1 /* MenuBarControllerFormattingTests.swift */; };
 		B8C805F60A25132645BF0868 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14D6B5E59F24E237BE9A2048 /* AppEnvironment.swift */; };
 		B9B9DD53B672CCF3B2442B37 /* RemoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FB155E1FF0B98531B0C8C4B /* RemoteStore.swift */; };
 		BA3142C836207CF9B8BE61AC /* RedactionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA10409810D1DB9F46D4E5B7 /* RedactionService.swift */; };
@@ -110,10 +113,12 @@
 		8A78A6FDFEEC9F26E054500D /* AskpassHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AskpassHelper.swift; sourceTree = "<group>"; };
 		9478F791851F30BD96455F9C /* LibSSH2Bridge.c */ = {isa = PBXFileReference; includeInIndex = 1; name = LibSSH2Bridge.c; path = Browser/LibSSH2Bridge.c; sourceTree = "<group>"; };
 		976EB96BF9E5A1C8D50860B3 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A4B5C6D7E8F90123456789A1 /* AppDelegateLifecycleTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppDelegateLifecycleTests.swift; sourceTree = "<group>"; };
 		A05E9274C616A1D6999000F5 /* MountRecord.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MountRecord.swift; sourceTree = "<group>"; };
 		B097402DC8306864DA634626 /* RemoteDirectoryBrowserService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteDirectoryBrowserService.swift; sourceTree = "<group>"; };
 		B12EFDD63AACEF8CB0DC5D00 /* SFTPDirectoryParser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SFTPDirectoryParser.swift; path = Browser/SFTPDirectoryParser.swift; sourceTree = "<group>"; };
 		B2D4F6081A3C5E7F9B1D3F5B /* ProcessRunnerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProcessRunnerTests.swift; sourceTree = "<group>"; };
+		B4C5D6E7F809123456789AB1 /* MenuBarControllerFormattingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuBarControllerFormattingTests.swift; sourceTree = "<group>"; };
 		BDC2BE588D03C7E5B66BEBBE /* KeychainServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KeychainServiceTests.swift; sourceTree = "<group>"; };
 		C0E6A98E0C44B4D2FD444ECE /* RemoteBrowserSessionManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RemoteBrowserSessionManager.swift; path = Browser/RemoteBrowserSessionManager.swift; sourceTree = "<group>"; };
 		C39D6153CFB9FB2C9B7A13D9 /* ValidationServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ValidationServiceTests.swift; sourceTree = "<group>"; };
@@ -130,6 +135,7 @@
 		DC599F0E6383A858F6D90A7B /* RemotesViewModelHelpersTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemotesViewModelHelpersTests.swift; sourceTree = "<group>"; };
 		DDF9ABAEACCB5A16404C9B83 /* LibSSH2SFTPTransport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LibSSH2SFTPTransport.swift; path = Browser/LibSSH2SFTPTransport.swift; sourceTree = "<group>"; };
 		E0005112E3D4EDABBAF4A9D7 /* RemoteDirectoryParserTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteDirectoryParserTests.swift; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F708192A3B4D /* LaunchAtLoginServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginServiceTests.swift; sourceTree = "<group>"; };
 		F005AF400340F242FC36A6D3 /* macfuseGuiApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = macfuseGuiApp.swift; sourceTree = "<group>"; };
 		F6FB986B4AC914C9EF18E4E2 /* RemoteBrowserViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteBrowserViewModel.swift; sourceTree = "<group>"; };
 		F89221BEA6FA740F83907CDB /* MountCommandBuilder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MountCommandBuilder.swift; sourceTree = "<group>"; };
@@ -285,11 +291,14 @@
 		7897B60AB4FD863491457965 /* macfuseGuiTests */ = {
 			isa = PBXGroup;
 			children = (
+				A4B5C6D7E8F90123456789A1 /* AppDelegateLifecycleTests.swift */,
 				0BB1B2C3D4E5F60718293B45 /* EditorOpenServiceTests.swift */,
 				0BB1B2C3D4E5F60718293B44 /* EditorPluginRegistryTests.swift */,
 				BDC2BE588D03C7E5B66BEBBE /* KeychainServiceTests.swift */,
+				B4C5D6E7F809123456789AB1 /* MenuBarControllerFormattingTests.swift */,
 				CA1CEF0B82125E597B943366 /* MountArgBuilderTests.swift */,
 				62E8919B0F450B3D28E534FE /* MountStateParserTests.swift */,
+				F1A2B3C4D5E6F708192A3B4D /* LaunchAtLoginServiceTests.swift */,
 				B2D4F6081A3C5E7F9B1D3F5B /* ProcessRunnerTests.swift */,
 				E0005112E3D4EDABBAF4A9D7 /* RemoteDirectoryParserTests.swift */,
 				06148311183BDBFC0D84CE6B /* RemoteStoreTests.swift */,
@@ -421,11 +430,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A4B5C6D7E8F90123456789A2 /* AppDelegateLifecycleTests.swift in Sources */,
 				0AA1B2C3D4E5F60718293A45 /* EditorOpenServiceTests.swift in Sources */,
 				0AA1B2C3D4E5F60718293A44 /* EditorPluginRegistryTests.swift in Sources */,
 				424336D6132B83926F3E3AA5 /* KeychainServiceTests.swift in Sources */,
+				B4C5D6E7F809123456789AB2 /* MenuBarControllerFormattingTests.swift in Sources */,
 				9BF77D70B94A2397034BF606 /* MountArgBuilderTests.swift in Sources */,
 				5D8518327271BCFD0F9C51D4 /* MountStateParserTests.swift in Sources */,
+				F1A2B3C4D5E6F708192A3B4C /* LaunchAtLoginServiceTests.swift in Sources */,
 				A1C3E5F7092B4D6F8A0C2E4A /* ProcessRunnerTests.swift in Sources */,
 				7ADAD9C1FD8FEA7F21F18A0E /* RemoteDirectoryParserTests.swift in Sources */,
 				FAB35C574ABD1A056E4A99A8 /* RemoteStoreTests.swift in Sources */,

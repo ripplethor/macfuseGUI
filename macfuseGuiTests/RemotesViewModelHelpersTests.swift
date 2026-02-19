@@ -216,6 +216,52 @@ final class RemotesViewModelHelpersTests: XCTestCase {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
+    func testStalledBusyOperationReplacementThresholdEdge() {
+        XCTAssertFalse(
+            RemotesViewModel.shouldReplaceBusyOperation(
+                newIntent: .connect,
+                newTrigger: .recovery,
+                existingIntent: .connect,
+                elapsedSeconds: 19.99,
+                thresholdSeconds: 20
+            )
+        )
+
+        XCTAssertTrue(
+            RemotesViewModel.shouldReplaceBusyOperation(
+                newIntent: .connect,
+                newTrigger: .recovery,
+                existingIntent: .connect,
+                elapsedSeconds: 20,
+                thresholdSeconds: 20
+            )
+        )
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func testStalledBusyOperationReplacementRequiresRecoveryOrStartupTrigger() {
+        XCTAssertFalse(
+            RemotesViewModel.shouldReplaceBusyOperation(
+                newIntent: .connect,
+                newTrigger: .manual,
+                existingIntent: .connect,
+                elapsedSeconds: 30,
+                thresholdSeconds: 20
+            )
+        )
+
+        XCTAssertFalse(
+            RemotesViewModel.shouldReplaceBusyOperation(
+                newIntent: .disconnect,
+                newTrigger: .recovery,
+                existingIntent: .connect,
+                elapsedSeconds: 30,
+                thresholdSeconds: 20
+            )
+        )
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
     private func makeRemote(name: String, autoConnect: Bool) -> RemoteConfig {
         RemoteConfig(
             displayName: name,

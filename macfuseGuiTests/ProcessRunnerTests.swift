@@ -167,6 +167,32 @@ final class MountManagerParallelOperationTests: XCTestCase {
         XCTAssertLessThan(elapsed, 12.0, "Connect should remain bounded even when mount inspection initially times out.")
     }
 
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    /// It verifies we do not preserve "connected" forever when mount table checks keep missing.
+    func testResponsivePathDoesNotPreserveConnectedForeverWithoutMountRecord() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/stale-preserve-limit"
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            alwaysResponsivePaths: [mountPoint]
+        )
+        let manager = makeManager(runner: runner)
+        let remote = makeRemote(name: "Stale Preserve", mountPoint: mountPoint)
+
+        let connected = await manager.connect(remote: remote, password: nil)
+        XCTAssertEqual(connected.state, .connected)
+
+        await runner.simulateExternalUnmount(mountPoint: mountPoint)
+
+        let first = await manager.refreshStatus(remote: remote)
+        let second = await manager.refreshStatus(remote: remote)
+        let third = await manager.refreshStatus(remote: remote)
+
+        XCTAssertEqual(first.state, .connected)
+        XCTAssertEqual(second.state, .connected)
+        XCTAssertEqual(third.state, .error)
+        XCTAssertTrue((third.lastError ?? "").localizedCaseInsensitiveContains("could not be verified"))
+    }
+
     private func makeManager(runner: ProcessRunning) -> MountManager {
         let diagnostics = DiagnosticsService()
         let parser = MountStateParser()
@@ -211,6 +237,7 @@ private struct ReadyDependencyChecker: DependencyChecking {
 
 private actor FakeMountRunner: ProcessRunning {
     private var mountedPoints: Set<String> = []
+    private let alwaysResponsivePaths: Set<String>
     private let connectDelayByMountPoint: [String: TimeInterval]
     private var connectDelayScheduleByMountPoint: [String: [TimeInterval]]
     private let mountInspectionDelay: TimeInterval
@@ -218,11 +245,17 @@ private actor FakeMountRunner: ProcessRunning {
     init(
         connectDelayByMountPoint: [String: TimeInterval],
         connectDelayScheduleByMountPoint: [String: [TimeInterval]] = [:],
-        mountInspectionDelay: TimeInterval = 0
+        mountInspectionDelay: TimeInterval = 0,
+        alwaysResponsivePaths: Set<String> = []
     ) {
         self.connectDelayByMountPoint = connectDelayByMountPoint
         self.connectDelayScheduleByMountPoint = connectDelayScheduleByMountPoint
         self.mountInspectionDelay = mountInspectionDelay
+        self.alwaysResponsivePaths = alwaysResponsivePaths
+    }
+
+    func simulateExternalUnmount(mountPoint: String) {
+        mountedPoints.remove(mountPoint)
     }
 
     func run(
@@ -323,7 +356,7 @@ private actor FakeMountRunner: ProcessRunning {
         }
 
         if executable == "/usr/bin/stat", let path = arguments.last {
-            let isMounted = mountedPoints.contains(path)
+            let isMounted = mountedPoints.contains(path) || alwaysResponsivePaths.contains(path)
             return ProcessResult(
                 executable: executable,
                 arguments: arguments,

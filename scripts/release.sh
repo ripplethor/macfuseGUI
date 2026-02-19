@@ -39,8 +39,45 @@ DRY_RUN=0
 ARCH_OVERRIDE_NORMALIZED=""
 DMG_PATHS=()
 CREATED_DMG_PATHS=()
+CREATED_NOTES_FILE=""
 
 RELEASE_NOTES=$'Unsigned macOS build (NOT code signed / NOT notarized)\n\nmacOS will likely block it on first launch.\n\nHow to open:\n1) Download the DMG, drag the app to Applications.\n2) In Finder, right-click the app -> Open -> Open.\nOr: System Settings -> Privacy & Security -> Open Anyway (after the first block).'
+
+generate_changelog() {
+  local previous_tag="$1"
+  local range_args=()
+
+  if [[ -n "$previous_tag" ]]; then
+    range_args=("${previous_tag}..HEAD")
+  else
+    range_args=("HEAD")
+  fi
+
+  # Generate a deterministic list from commit subjects. Exclude the auto release commit line.
+  git log --no-merges --pretty=format:'- %s (%h)' "${range_args[@]}" \
+    | sed -E '/^- Release v[0-9]+\.[0-9]+\.[0-9]+ \([0-9a-f]+\)$/d'
+}
+
+write_release_notes_file() {
+  local output_path="$1"
+  local previous_tag="$2"
+  local changelog
+
+  changelog="$(generate_changelog "$previous_tag")"
+
+  {
+    printf '%s\n\n' "$RELEASE_NOTES"
+    printf '## Changes\n\n'
+    if [[ -n "$previous_tag" ]]; then
+      printf 'Since %s:\n\n' "$previous_tag"
+    fi
+    if [[ -n "$changelog" ]]; then
+      printf '%s\n' "$changelog"
+    else
+      printf '%s\n' "- No changes listed."
+    fi
+  } > "$output_path"
+}
 
 die() {
   echo "ERROR: $1" >&2
@@ -58,6 +95,9 @@ cleanup() {
       rm -f "$dmg"
     fi
   done
+  if [[ -n "$CREATED_NOTES_FILE" && -f "$CREATED_NOTES_FILE" ]]; then
+    rm -f "$CREATED_NOTES_FILE"
+  fi
 }
 trap cleanup EXIT
 
@@ -215,6 +255,10 @@ main() {
   if [[ -n "$version_from_tag" ]] && ! is_valid_version "$version_from_tag"; then
     die "Invalid tag version discovered: '$version_from_tag'"
   fi
+  local previous_tag=""
+  if [[ -n "$version_from_tag" ]]; then
+    previous_tag="v${version_from_tag}"
+  fi
 
   local base_version
   base_version="$(max_version "$version_from_file" "$version_from_tag")"
@@ -230,6 +274,8 @@ main() {
     new_version="$(bump_patch "$base_version")"
   fi
   local tag="v${new_version}"
+  CREATED_NOTES_FILE="$(mktemp -t macfusegui-release-notes.XXXXXX)"
+  write_release_notes_file "$CREATED_NOTES_FILE" "$previous_tag"
 
   if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null 2>&1; then
     die "Tag already exists locally: $tag"
@@ -326,6 +372,7 @@ main() {
     echo "[dry-run] Would create tag: $tag"
     echo "[dry-run] Would push atomically: git push --atomic origin \"$branch\" \"$tag\""
     echo "[dry-run] Would create/update GitHub release and upload: ${DMG_PATHS[*]}"
+    echo "[dry-run] Would set GitHub release notes from commits since: ${previous_tag:-<no previous tag>}"
   else
     local app_path
     for app_path in "${resolved_app_bundle_paths[@]}"; do
@@ -373,10 +420,12 @@ main() {
 
     if gh release view "$tag" >/dev/null 2>&1; then
       gh release upload "$tag" "${DMG_PATHS[@]}" --clobber
-      gh release edit "$tag" --title "$tag" --notes "$RELEASE_NOTES"
+      gh release edit "$tag" --title "$tag" --notes-file "$CREATED_NOTES_FILE"
     else
-      gh release create "$tag" "${DMG_PATHS[@]}" --verify-tag --title "$tag" --notes "$RELEASE_NOTES"
+      gh release create "$tag" "${DMG_PATHS[@]}" --verify-tag --title "$tag" --notes-file "$CREATED_NOTES_FILE"
     fi
+    rm -f "$CREATED_NOTES_FILE"
+    CREATED_NOTES_FILE=""
 
     for dmg_path in "${DMG_PATHS[@]}"; do
       rm -f "$dmg_path"

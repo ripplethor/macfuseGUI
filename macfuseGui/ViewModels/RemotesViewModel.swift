@@ -60,6 +60,13 @@ private actor OperationLimiter {
 // 4) Recovery methods (periodic, wake, network restore).
 // 5) Browser helpers and diagnostics helpers near the end.
 //
+// Design note:
+// This file intentionally centralizes orchestration so key invariants do not drift:
+// - desiredConnections remains the source of recovery intent
+// - one active operation per remote, with explicit conflict policies
+// - anti-flap status refresh and bounded timeouts
+// Refactors should prefer extracting pure helpers while keeping state ownership and orchestration here.
+//
 // Why @MainActor:
 // - @Published properties are read by SwiftUI/AppKit UI.
 // - Running this type on the main actor avoids UI data races.
@@ -92,6 +99,12 @@ final class RemotesViewModel: ObservableObject {
         case recovery
         case startup
         case termination
+    }
+
+    enum NetworkReachabilityTransition: Sendable, Equatable {
+        case unchanged
+        case becameReachable
+        case becameUnreachable
     }
 
     /// Beginner note: This type groups related state and behavior for one part of the app.
@@ -174,7 +187,7 @@ final class RemotesViewModel: ObservableObject {
     private let remoteDirectoryBrowserService: RemoteDirectoryBrowserService
     private let diagnostics: DiagnosticsService
     private let launchAtLoginService: LaunchAtLoginService
-    private let networkMonitorQueue = DispatchQueue(label: "com.visualweb.macfusegui.network-monitor")
+    private let networkMonitorQueue: DispatchQueue
 
     // Core intent set: if a remote ID is here, user wants it kept connected.
     // Recovery logic only auto-reconnects remotes in this set.
@@ -205,11 +218,12 @@ final class RemotesViewModel: ObservableObject {
     private var shutdownInProgress = false
     private var recoveryIndicatorReason: String?
     // Watchdogs make sure UI never sits in connecting/disconnecting forever.
-    private let connectWatchdogTimeout: TimeInterval = 45
-    private let disconnectWatchdogTimeout: TimeInterval = 10
-    private let refreshWatchdogTimeout: TimeInterval = 18
+    private let connectWatchdogTimeout: TimeInterval
+    private let disconnectWatchdogTimeout: TimeInterval
+    private let refreshWatchdogTimeout: TimeInterval
     // When everything looks healthy, periodic probes are intentionally less frequent.
-    private let healthyPeriodicProbeInterval: TimeInterval = 60
+    private let healthyPeriodicProbeInterval: TimeInterval
+    private let periodicRecoveryPassInterval: TimeInterval
     private let networkRestoredDebounceSeconds: TimeInterval = 1.5
     private var operationWatchdogTasks: [UUID: Task<Void, Never>] = [:]
     // Hard timeout for actual connect operation body.
@@ -236,7 +250,8 @@ final class RemotesViewModel: ObservableObject {
         mountManager: MountManager,
         remoteDirectoryBrowserService: RemoteDirectoryBrowserService,
         diagnostics: DiagnosticsService,
-        launchAtLoginService: LaunchAtLoginService
+        launchAtLoginService: LaunchAtLoginService,
+        runtimeConfiguration: RuntimeConfiguration = RuntimeConfiguration()
     ) {
         self.remoteStore = remoteStore
         self.keychainService = keychainService
@@ -247,6 +262,13 @@ final class RemotesViewModel: ObservableObject {
         self.remoteDirectoryBrowserService = remoteDirectoryBrowserService
         self.diagnostics = diagnostics
         self.launchAtLoginService = launchAtLoginService
+        self.connectWatchdogTimeout = runtimeConfiguration.remotes.connectWatchdogTimeout
+        self.disconnectWatchdogTimeout = runtimeConfiguration.remotes.disconnectWatchdogTimeout
+        self.refreshWatchdogTimeout = runtimeConfiguration.remotes.refreshWatchdogTimeout
+        self.healthyPeriodicProbeInterval = runtimeConfiguration.remotes.healthyPeriodicProbeInterval
+        // Keep queue identity deterministic in logs/tests and configurable via runtime configuration.
+        self.networkMonitorQueue = DispatchQueue(label: runtimeConfiguration.remotes.networkMonitorQueueLabel)
+        self.periodicRecoveryPassInterval = runtimeConfiguration.remotes.periodicRecoveryPassInterval
     }
 
     /// Beginner note: Deinitializer runs during teardown to stop background work and free resources.
@@ -457,7 +479,15 @@ final class RemotesViewModel: ObservableObject {
                     }
                 } else {
                     // If auth mode switched away from password, remove old secret.
-                    try? keychainService.deletePassword(remoteID: remote.id.uuidString)
+                    do {
+                        try keychainService.deletePassword(remoteID: remote.id.uuidString)
+                    } catch {
+                        diagnostics.append(
+                            level: .warning,
+                            category: "store",
+                            message: "Failed to delete keychain password for \(remote.displayName): \(error.localizedDescription)"
+                        )
+                    }
                     cachePassword(nil, for: remote.id)
                 }
             } catch {
@@ -630,7 +660,15 @@ final class RemotesViewModel: ObservableObject {
 
             do {
                 try remoteStore.delete(id: remoteID)
-                try? keychainService.deletePassword(remoteID: remoteID.uuidString)
+                do {
+                    try keychainService.deletePassword(remoteID: remoteID.uuidString)
+                } catch {
+                    diagnostics.append(
+                        level: .warning,
+                        category: "store",
+                        message: "Failed to delete keychain password for deleted remote \(remote.displayName): \(error.localizedDescription)"
+                    )
+                }
                 cachePassword(nil, for: remoteID)
                 remotes.removeAll { $0.id == remoteID }
                 removeStatus(for: remoteID)
@@ -1466,7 +1504,9 @@ final class RemotesViewModel: ObservableObject {
             return
         }
 
-        let timer = Timer(timeInterval: 15.0, repeats: true) { [weak self] _ in
+        // By design this interval is shorter than healthyPeriodicProbeInterval.
+        // The timer drives the "should we probe?" decision loop, while deeper probes are throttled separately.
+        let timer = Timer(timeInterval: periodicRecoveryPassInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else {
                     return
@@ -1578,7 +1618,7 @@ final class RemotesViewModel: ObservableObject {
                 self.refreshRecoveryIndicator()
             }
             await self.performWakePreflightCleanup()
-            self.scheduleRecoveryBurst(trigger: "wake", delaySeconds: [0, 1, 3, 8])
+            self.scheduleRecoveryBurst(trigger: "wake", delaySeconds: Self.recoveryBurstDelays(for: "wake"))
         }
     }
 
@@ -1707,11 +1747,15 @@ final class RemotesViewModel: ObservableObject {
         let previous = networkReachable
         networkReachable = isReachable
 
-        if previous == isReachable {
+        let transition = Self.networkReachabilityTransition(
+            previousReachable: previous,
+            currentReachable: isReachable
+        )
+        if transition == .unchanged {
             return
         }
 
-        if isReachable {
+        if transition == .becameReachable {
             networkRestoreDebounceTask?.cancel()
             networkRestoreDebounceTask = Task { @MainActor [weak self] in
                 guard let self else {
@@ -1734,7 +1778,10 @@ final class RemotesViewModel: ObservableObject {
                     category: "recovery",
                     message: "Network became reachable. Running staged recovery passes."
                 )
-                self.scheduleRecoveryBurst(trigger: "network-restored", delaySeconds: [0, 2, 6])
+                self.scheduleRecoveryBurst(
+                    trigger: "network-restored",
+                    delaySeconds: Self.recoveryBurstDelays(for: "network-restored")
+                )
                 await self.runPendingStartupAutoConnect(trigger: "network-restored")
             }
         } else {
@@ -2138,22 +2185,11 @@ final class RemotesViewModel: ObservableObject {
             }
 
             let remoteName = self.remotes.first(where: { $0.id == remoteID })?.displayName ?? remoteID.uuidString
-            var timeoutMessage: String?
-
-            switch intent {
-            case .connect:
-                if self.status(for: remoteID).state == .connecting {
-                    timeoutMessage = "Connect timed out. Check network/credentials and retry."
-                }
-            case .disconnect:
-                if self.status(for: remoteID).state == .disconnecting {
-                    timeoutMessage = "Disconnect timed out after \(Int(self.disconnectWatchdogTimeout))s. Close files using the mount, then retry."
-                }
-            case .refresh:
-                timeoutMessage = "Status refresh timed out. Try Refresh again."
-            case .testConnection:
-                timeoutMessage = "Test connection timed out. Check network/credentials and retry."
-            }
+            let timeoutMessage = Self.watchdogTimeoutMessage(
+                intent: intent,
+                currentState: self.status(for: remoteID).state,
+                disconnectWatchdogTimeout: self.disconnectWatchdogTimeout
+            )
 
             if let timeoutMessage, !timeoutMessage.isEmpty {
                 if intent == .connect || intent == .disconnect || intent == .refresh {
@@ -2231,6 +2267,7 @@ final class RemotesViewModel: ObservableObject {
     ) async -> (RemoteStatus?, Bool) {
         // Resume gate guarantees continuation is only resumed once even though
         // both the operation task and timeout task race to finish first.
+        // @unchecked Sendable is safe here because all mutable state is guarded by lock.
         final class ResumeGate: @unchecked Sendable {
             private let lock = NSLock()
             private var resumed = false
@@ -2296,6 +2333,27 @@ final class RemotesViewModel: ObservableObject {
         return matrix[index]
     }
 
+    nonisolated static func recoveryBurstDelays(for trigger: String) -> [Int] {
+        let normalized = trigger.lowercased()
+        if normalized.contains("wake") {
+            return [0, 1, 3, 8]
+        }
+        if normalized.contains("network-restored") {
+            return [0, 2, 6]
+        }
+        return [0]
+    }
+
+    nonisolated static func networkReachabilityTransition(
+        previousReachable: Bool,
+        currentReachable: Bool
+    ) -> NetworkReachabilityTransition {
+        if previousReachable == currentReachable {
+            return .unchanged
+        }
+        return currentReachable ? .becameReachable : .becameUnreachable
+    }
+
     nonisolated static func requiredRecoveryStrikes(for trigger: String) -> Int {
         let normalized = trigger.lowercased()
         if normalized.contains("wake") || normalized.contains("network-restored") {
@@ -2337,6 +2395,26 @@ final class RemotesViewModel: ObservableObject {
             && (newTrigger == .recovery || newTrigger == .startup)
             && (existingIntent == .connect || existingIntent == .refresh)
             && elapsedSeconds >= thresholdSeconds
+    }
+
+    nonisolated static func watchdogTimeoutMessage(
+        intent: RemoteOperationIntent,
+        currentState: RemoteConnectionState,
+        disconnectWatchdogTimeout: TimeInterval
+    ) -> String? {
+        switch intent {
+        case .connect:
+            return currentState == .connecting ? "Connect timed out. Check network/credentials and retry." : nil
+        case .disconnect:
+            guard currentState == .disconnecting else {
+                return nil
+            }
+            return "Disconnect timed out after \(Int(disconnectWatchdogTimeout))s. Close files using the mount, then retry."
+        case .refresh:
+            return "Status refresh timed out. Try Refresh again."
+        case .testConnection:
+            return "Test connection timed out. Check network/credentials and retry."
+        }
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -2896,8 +2974,19 @@ struct LaunchAtLoginState: Equatable, Sendable {
 @MainActor
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
+protocol LaunchAtLoginAppService: AnyObject {
+    var status: SMAppService.Status { get }
+    func register() throws
+    func unregister() async throws
+}
+
+extension SMAppService: LaunchAtLoginAppService {}
+
+@MainActor
+/// Beginner note: This type groups related state and behavior for one part of the app.
+/// Read stored properties first, then follow methods top-to-bottom to understand flow.
 final class LaunchAtLoginService {
-    private let appService: SMAppService
+    private let appService: any LaunchAtLoginAppService
     private let fileManager: FileManager
     private let runner: ProcessRunning
     private let launchAgentLabel = "com.visualweb.macfusegui.launchagent"
@@ -2905,7 +2994,7 @@ final class LaunchAtLoginService {
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init(
-        appService: SMAppService = .mainApp,
+        appService: any LaunchAtLoginAppService = SMAppService.mainApp,
         fileManager: FileManager = .default,
         runner: ProcessRunning = ProcessRunner()
     ) {
@@ -2960,7 +3049,7 @@ final class LaunchAtLoginService {
                 try appService.register()
                 registered = true
             } catch {
-                // Continue to fallback launch agent registration.
+                // SMAppService can fail for non-standard install contexts; fall back to LaunchAgent.
             }
 
             let postRegisterState = currentState()
@@ -2981,7 +3070,7 @@ final class LaunchAtLoginService {
             do {
                 try await appService.unregister()
             } catch {
-                // Ignore unregister failures when app service was not active.
+                // Unregister can fail when not registered; we still proceed to disable fallback.
             }
             try await disableLaunchAgentFallback()
         }
@@ -3031,9 +3120,11 @@ final class LaunchAtLoginService {
         let plistData = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
         try plistData.write(to: launchAgentPlistURL, options: .atomic)
 
+        // launchctl bootout may fail when the agent is not loaded yet. Treat as best-effort cleanup.
         _ = try? await runLaunchctl(arguments: ["bootout", currentUserLaunchDomain, launchAgentPlistURL.path])
         _ = try? await runLaunchctl(arguments: ["bootout", currentUserLaunchDomain, launchAgentLabel])
 
+        // launchctl enable/bootstrap can fail due to policy/permissions; caller surfaces failure if state does not stick.
         _ = try? await runLaunchctl(arguments: ["bootstrap", currentUserLaunchDomain, launchAgentPlistURL.path])
         _ = try? await runLaunchctl(arguments: ["enable", "\(currentUserLaunchDomain)/\(launchAgentLabel)"])
     }
@@ -3041,6 +3132,7 @@ final class LaunchAtLoginService {
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This can throw an error: callers should use do/try/catch or propagate the error.
     private func disableLaunchAgentFallback() async throws {
+        // All launchctl calls here are best-effort. Some variants fail depending on current load state.
         _ = try? await runLaunchctl(arguments: ["bootout", currentUserLaunchDomain, launchAgentLabel])
         _ = try? await runLaunchctl(arguments: ["bootout", currentUserLaunchDomain, launchAgentPlistURL.path])
         _ = try? await runLaunchctl(arguments: ["disable", "\(currentUserLaunchDomain)/\(launchAgentLabel)"])

@@ -282,6 +282,8 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
             _ = kill(-processGroupID, SIGTERM)
         }
         _ = kill(handle.pid, SIGTERM)
+        // By design this is a short blocking grace period in a termination-only path.
+        // It gives child processes a chance to exit cleanly before escalating to SIGKILL.
         usleep(250_000)
         if let processGroupID = handle.processGroupID, processGroupID > 1 {
             _ = kill(-processGroupID, SIGKILL)

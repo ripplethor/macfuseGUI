@@ -56,8 +56,8 @@ actor LibSSH2SessionActor {
     private let requestRetrySchedule: [UInt64]
     // Nanosecond delays for background recovery attempts.
     private let recoveryRetrySchedule: [UInt64]
-    private let breakerThreshold = 8
-    private let breakerWindow: TimeInterval = 30
+    private let breakerThreshold: Int
+    private let breakerWindow: TimeInterval
     private let keepAliveIntervalNanoseconds: UInt64
 
     /// Beginner note: Initializers create valid state before any other method is used.
@@ -69,7 +69,9 @@ actor LibSSH2SessionActor {
         diagnostics: DiagnosticsService,
         requestRetrySchedule: [UInt64] = [300_000_000, 800_000_000],
         recoveryRetrySchedule: [UInt64] = [200_000_000, 800_000_000, 2_000_000_000, 5_000_000_000],
-        keepAliveIntervalNanoseconds: UInt64 = 12_000_000_000
+        keepAliveIntervalNanoseconds: UInt64 = 12_000_000_000,
+        breakerThreshold: Int = 8,
+        breakerWindow: TimeInterval = 30
     ) {
         self.id = id
         self.remote = remote
@@ -79,6 +81,8 @@ actor LibSSH2SessionActor {
         self.requestRetrySchedule = requestRetrySchedule
         self.recoveryRetrySchedule = recoveryRetrySchedule
         self.keepAliveIntervalNanoseconds = keepAliveIntervalNanoseconds
+        self.breakerThreshold = breakerThreshold
+        self.breakerWindow = breakerWindow
         self.lastPath = BrowserPathNormalizer.normalize(path: remote.remoteDirectory)
         self.health = BrowserConnectionHealth(
             state: .connecting,

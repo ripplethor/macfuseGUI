@@ -342,18 +342,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Beginner note: Detects whether this process is an XCTest host process.
     /// We use multiple checks because Xcode launch contexts vary by test mode.
     private func isRunningUnderXCTest() -> Bool {
-        let environment = ProcessInfo.processInfo.environment
+        Self.isRunningUnderXCTest(
+            environment: ProcessInfo.processInfo.environment,
+            processName: ProcessInfo.processInfo.processName,
+            hasXCTestCaseClass: NSClassFromString("XCTestCase") != nil
+        )
+    }
+
+    nonisolated static func isRunningUnderXCTest(
+        environment: [String: String],
+        processName: String,
+        hasXCTestCaseClass: Bool
+    ) -> Bool {
         if environment["XCTestConfigurationFilePath"] != nil ||
             environment["XCTestBundlePath"] != nil ||
             environment["XCTestSessionIdentifier"] != nil {
             return true
         }
 
-        if NSClassFromString("XCTestCase") != nil {
+        if hasXCTestCaseClass {
             return true
         }
 
-        return ProcessInfo.processInfo.processName.lowercased().contains("xctest")
+        return processName.lowercased().contains("xctest")
     }
 
 }

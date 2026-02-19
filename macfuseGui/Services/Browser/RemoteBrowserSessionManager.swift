@@ -13,12 +13,21 @@ import Foundation
 actor RemoteBrowserSessionManager {
     private let transport: BrowserTransport
     private let diagnostics: DiagnosticsService
+    private let breakerThreshold: Int
+    private let breakerWindow: TimeInterval
     private var sessions: [RemoteBrowserSessionID: LibSSH2SessionActor] = [:]
 
     /// Beginner note: Initializers create valid state before any other method is used.
-    init(transport: BrowserTransport, diagnostics: DiagnosticsService) {
+    init(
+        transport: BrowserTransport,
+        diagnostics: DiagnosticsService,
+        breakerThreshold: Int = 8,
+        breakerWindow: TimeInterval = 30
+    ) {
         self.transport = transport
         self.diagnostics = diagnostics
+        self.breakerThreshold = breakerThreshold
+        self.breakerWindow = breakerWindow
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -29,7 +38,9 @@ actor RemoteBrowserSessionManager {
             remote: remote,
             password: password,
             transport: transport,
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            breakerThreshold: breakerThreshold,
+            breakerWindow: breakerWindow
         )
         sessions[sessionID] = session
         diagnostics.append(

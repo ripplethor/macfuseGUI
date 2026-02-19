@@ -43,7 +43,9 @@ final class JSONRemoteStore: RemoteStore {
         if let storageURL {
             self.storageURL = storageURL
         } else {
-            let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            // Defensive fallback: FileManager should return Application Support URL, but avoid crashing if it doesn't.
+            let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+                ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
             self.storageURL = appSupport
                 .appendingPathComponent("macfuseGui", isDirectory: true)
                 .appendingPathComponent("remotes.json", isDirectory: false)

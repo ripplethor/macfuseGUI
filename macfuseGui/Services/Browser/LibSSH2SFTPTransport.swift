@@ -39,12 +39,17 @@ extension BrowserTransport {
 
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
+// @unchecked Sendable is safe here because the sessions map is only accessed on the private serial bridgeQueue.
 final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
     private let diagnostics: DiagnosticsService
     private let bridgeQueue = DispatchQueue(label: "com.visualweb.macfusegui.browser.libssh2", qos: .userInitiated)
     private let listTimeoutSeconds: TimeInterval
     private let pingTimeoutSeconds: TimeInterval
     private var sessions: [UUID: UnsafeMutablePointer<macfusegui_libssh2_session_handle>] = [:]
+
+    private func assertOnBridgeQueue() {
+        dispatchPrecondition(condition: .onQueue(bridgeQueue))
+    }
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init(
@@ -241,6 +246,7 @@ final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
         privateKeyPath: String?,
         timeout: Int32
     ) throws -> UnsafeMutablePointer<macfusegui_libssh2_session_handle> {
+        assertOnBridgeQueue()
         if let existing = sessions[remote.id] {
             return existing
         }
@@ -283,7 +289,10 @@ final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
             category: "remote-browser",
             message: "Opened persistent libssh2 session for \(remote.displayName) (\(remote.id.uuidString))"
         )
-        return handle!
+        guard let resolved = handle else {
+            throw AppError.remoteBrowserError("libssh2 session returned success status but no session handle.")
+        }
+        return resolved
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -339,6 +348,7 @@ final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func closeSessionSync(for remoteID: UUID) {
+        assertOnBridgeQueue()
         guard let handle = sessions.removeValue(forKey: remoteID) else {
             return
         }

@@ -87,6 +87,7 @@ static char *macfusegui_strdup_len(const char *value, size_t len) {
 
     char *copy = (char *)malloc(len + 1);
     if (copy == NULL) {
+        /* Caller must handle NULL and unwind cleanup safely. */
         return NULL;
     }
 

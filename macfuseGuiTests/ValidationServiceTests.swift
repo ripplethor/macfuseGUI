@@ -161,4 +161,98 @@ final class ValidationServiceTests: XCTestCase {
             60
         )
     }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func testRequiredRecoveryStrikesByTriggerType() {
+        XCTAssertEqual(RemotesViewModel.requiredRecoveryStrikes(for: "wake"), 1)
+        XCTAssertEqual(RemotesViewModel.requiredRecoveryStrikes(for: "network-restored"), 1)
+        XCTAssertEqual(RemotesViewModel.requiredRecoveryStrikes(for: "periodic"), 2)
+        XCTAssertEqual(RemotesViewModel.requiredRecoveryStrikes(for: "status-change"), 1)
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func testNetworkRestoredBackoffStartsFastForTransientFailures() {
+        XCTAssertEqual(
+            RemotesViewModel.reconnectDelaySeconds(
+                attempt: 0,
+                trigger: "network-restored",
+                lastError: "broken pipe"
+            ),
+            0
+        )
+        XCTAssertEqual(
+            RemotesViewModel.reconnectDelaySeconds(
+                attempt: 1,
+                trigger: "network-restored",
+                lastError: "broken pipe"
+            ),
+            1
+        )
+        XCTAssertEqual(
+            RemotesViewModel.reconnectDelaySeconds(
+                attempt: 2,
+                trigger: "network-restored",
+                lastError: "broken pipe"
+            ),
+            2
+        )
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func testRecoveryBurstDelaysForWakeAndNetworkRestore() {
+        XCTAssertEqual(RemotesViewModel.recoveryBurstDelays(for: "wake"), [0, 1, 3, 8])
+        XCTAssertEqual(RemotesViewModel.recoveryBurstDelays(for: "network-restored"), [0, 2, 6])
+        XCTAssertEqual(RemotesViewModel.recoveryBurstDelays(for: "periodic"), [0])
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func testNetworkReachabilityTransitionMapping() {
+        XCTAssertEqual(
+            RemotesViewModel.networkReachabilityTransition(previousReachable: false, currentReachable: false),
+            .unchanged
+        )
+        XCTAssertEqual(
+            RemotesViewModel.networkReachabilityTransition(previousReachable: false, currentReachable: true),
+            .becameReachable
+        )
+        XCTAssertEqual(
+            RemotesViewModel.networkReachabilityTransition(previousReachable: true, currentReachable: false),
+            .becameUnreachable
+        )
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func testWatchdogTimeoutMessageSelection() {
+        XCTAssertEqual(
+            RemotesViewModel.watchdogTimeoutMessage(
+                intent: .connect,
+                currentState: .connecting,
+                disconnectWatchdogTimeout: 10
+            ),
+            "Connect timed out. Check network/credentials and retry."
+        )
+        XCTAssertNil(
+            RemotesViewModel.watchdogTimeoutMessage(
+                intent: .connect,
+                currentState: .connected,
+                disconnectWatchdogTimeout: 10
+            )
+        )
+        XCTAssertEqual(
+            RemotesViewModel.watchdogTimeoutMessage(
+                intent: .disconnect,
+                currentState: .disconnecting,
+                disconnectWatchdogTimeout: 12
+            ),
+            "Disconnect timed out after 12s. Close files using the mount, then retry."
+        )
+        XCTAssertEqual(
+            RemotesViewModel.watchdogTimeoutMessage(
+                intent: .refresh,
+                currentState: .connected,
+                disconnectWatchdogTimeout: 10
+            ),
+            "Status refresh timed out. Try Refresh again."
+        )
+    }
 }

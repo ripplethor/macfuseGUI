@@ -24,20 +24,28 @@ final class UnmountService {
     private let mountStateParser: MountStateParser
     // Hard cap for a single unmount attempt. We intentionally keep this low so
     // disconnect/connect flows never "hang" for long periods.
-    private let totalUnmountTimeout: TimeInterval = 10
+    private let totalUnmountTimeout: TimeInterval
     // Keep per-command timeout short so one hung tool cannot consume almost
     // the full unmount budget by itself.
-    private let perCommandMaxTimeout: TimeInterval = 3
+    private let perCommandMaxTimeout: TimeInterval
     private let mountInspectionTimeout: TimeInterval = 1.5
     private let dfFallbackTimeout: TimeInterval = 1.5
     private let psTimeout: TimeInterval = 2
     private let lsofTimeout: TimeInterval = 3
 
     /// Beginner note: Initializers create valid state before any other method is used.
-    init(runner: ProcessRunning, diagnostics: DiagnosticsService, mountStateParser: MountStateParser) {
+    init(
+        runner: ProcessRunning,
+        diagnostics: DiagnosticsService,
+        mountStateParser: MountStateParser,
+        totalUnmountTimeout: TimeInterval = 10,
+        perCommandMaxTimeout: TimeInterval = 3
+    ) {
         self.runner = runner
         self.diagnostics = diagnostics
         self.mountStateParser = mountStateParser
+        self.totalUnmountTimeout = totalUnmountTimeout
+        self.perCommandMaxTimeout = perCommandMaxTimeout
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -76,6 +84,8 @@ final class UnmountService {
 
             let mergedRoundFailures = lastFailures.joined(separator: "; ").lowercased()
             if mergedRoundFailures.contains("resource busy") || mergedRoundFailures.contains("busy") {
+                // Busy-process detection is best-effort. If lsof fails (permissions, timing, or transient state),
+                // we still return a generic busy error so disconnect/connect never wedges on diagnostics work.
                 let blockers = (try? await detectBlockingProcesses(mountPoint: normalizedMountPoint)) ?? []
                 if !blockers.isEmpty {
                     let nonSSHFSBlockers = blockers.filter { !$0.command.lowercased().contains("sshfs") }
@@ -116,6 +126,7 @@ final class UnmountService {
                 // Only sleep if we still have time left in the overall unmount budget.
                 let remaining = deadline.timeIntervalSinceNow
                 if remaining > 0.6 {
+                    // Best-effort delay only. Ignore cancellation so callers do not treat sleep as an unmount failure.
                     try? await Task.sleep(nanoseconds: 500_000_000)
                 }
             }

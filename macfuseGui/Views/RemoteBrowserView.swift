@@ -10,20 +10,79 @@ import SwiftUI
 
 // Finder-style browser sheet for picking a remote directory.
 // This view is intentionally directories-only to match mount target workflow.
+enum BrowserColumnWidthKey: String {
+    case name = "browser.column.name"
+    case date = "browser.column.date"
+    case kind = "browser.column.kind"
+    case size = "browser.column.size"
+
+    var defaultValue: CGFloat {
+        switch self {
+        case .name:
+            return 280
+        case .date:
+            return 160
+        case .kind:
+            return 100
+        case .size:
+            return 90
+        }
+    }
+}
+
+// Keep persistence behind a tiny abstraction so view tests can inject an in-memory store.
+protocol BrowserColumnWidthStoring {
+    func width(for key: BrowserColumnWidthKey) -> CGFloat
+    func setWidth(_ value: CGFloat, for key: BrowserColumnWidthKey)
+}
+
+struct UserDefaultsBrowserColumnWidthStore: BrowserColumnWidthStoring {
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func width(for key: BrowserColumnWidthKey) -> CGFloat {
+        (defaults.object(forKey: key.rawValue) as? CGFloat) ?? key.defaultValue
+    }
+
+    func setWidth(_ value: CGFloat, for key: BrowserColumnWidthKey) {
+        defaults.set(value, forKey: key.rawValue)
+    }
+}
+
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 struct RemoteBrowserView: View {
     @ObservedObject var viewModel: RemoteBrowserViewModel
     let onSelect: (String) -> Void
     let onCancel: () -> Void
+    private let columnWidthStore: any BrowserColumnWidthStoring
 
     // didLoad prevents duplicate initial load when SwiftUI re-evaluates the view body.
     @State private var didLoad = false
     // Persisted table widths keep user layout preference across sessions.
-    @State private var nameColumnWidth: CGFloat = UserDefaults.standard.object(forKey: "browser.column.name") as? CGFloat ?? 280
-    @State private var dateColumnWidth: CGFloat = UserDefaults.standard.object(forKey: "browser.column.date") as? CGFloat ?? 160
-    @State private var kindColumnWidth: CGFloat = UserDefaults.standard.object(forKey: "browser.column.kind") as? CGFloat ?? 100
-    @State private var sizeColumnWidth: CGFloat = UserDefaults.standard.object(forKey: "browser.column.size") as? CGFloat ?? 90
+    @State private var nameColumnWidth: CGFloat
+    @State private var dateColumnWidth: CGFloat
+    @State private var kindColumnWidth: CGFloat
+    @State private var sizeColumnWidth: CGFloat
+
+    init(
+        viewModel: RemoteBrowserViewModel,
+        onSelect: @escaping (String) -> Void,
+        onCancel: @escaping () -> Void,
+        columnWidthStore: any BrowserColumnWidthStoring = UserDefaultsBrowserColumnWidthStore()
+    ) {
+        self.viewModel = viewModel
+        self.onSelect = onSelect
+        self.onCancel = onCancel
+        self.columnWidthStore = columnWidthStore
+        _nameColumnWidth = State(initialValue: columnWidthStore.width(for: .name))
+        _dateColumnWidth = State(initialValue: columnWidthStore.width(for: .date))
+        _kindColumnWidth = State(initialValue: columnWidthStore.width(for: .kind))
+        _sizeColumnWidth = State(initialValue: columnWidthStore.width(for: .size))
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -316,10 +375,10 @@ struct RemoteBrowserView: View {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func persistColumnWidths() {
-        UserDefaults.standard.set(nameColumnWidth, forKey: "browser.column.name")
-        UserDefaults.standard.set(dateColumnWidth, forKey: "browser.column.date")
-        UserDefaults.standard.set(kindColumnWidth, forKey: "browser.column.kind")
-        UserDefaults.standard.set(sizeColumnWidth, forKey: "browser.column.size")
+        columnWidthStore.setWidth(nameColumnWidth, for: .name)
+        columnWidthStore.setWidth(dateColumnWidth, for: .date)
+        columnWidthStore.setWidth(kindColumnWidth, for: .kind)
+        columnWidthStore.setWidth(sizeColumnWidth, for: .size)
     }
 
     private static func dateText(_ value: Date?) -> String {

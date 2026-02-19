@@ -22,6 +22,8 @@ import SwiftUI
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 final class MenuBarController: NSObject {
+    // By design: keep a single global status item to prevent duplicate menu bar icons when the app is
+    // relaunched in unusual contexts (for example, rapid relaunches or test-host processes).
     private static var activeStatusItem: NSStatusItem?
 
     private let viewModel: RemotesViewModel
@@ -237,13 +239,12 @@ final class MenuBarController: NSObject {
                 return
             }
 
-            let timer = Timer(
-                timeInterval: 0.3,
-                target: self,
-                selector: #selector(handleActivityTimerTick),
-                userInfo: nil,
-                repeats: true
-            )
+            // Closure timer keeps behavior identical while avoiding Objective-C selector wiring.
+            let timer = Timer(timeInterval: 0.3, repeats: true) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.handleActivityTimerTick()
+                }
+            }
             timer.tolerance = 0.03
             RunLoop.main.add(timer, forMode: .common)
             activityTimer = timer
@@ -255,7 +256,6 @@ final class MenuBarController: NSObject {
         }
     }
 
-    @objc
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func handleActivityTimerTick() {
         activityFrame = (activityFrame + 1) % activitySymbols.count
@@ -325,14 +325,7 @@ final class MenuBarController: NSObject {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func recoveryReasonLabel(_ reason: String) -> String {
-        switch reason {
-        case "wake":
-            return "after wake"
-        case "network-restored":
-            return "after network restore"
-        default:
-            return reason
-        }
+        Self.recoveryReasonDisplayText(reason)
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -353,7 +346,22 @@ final class MenuBarController: NSObject {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func elapsedText(since date: Date) -> String {
-        let interval = max(0, Date().timeIntervalSince(date))
+        Self.formattedElapsedText(since: date, now: Date())
+    }
+
+    nonisolated static func recoveryReasonDisplayText(_ reason: String) -> String {
+        switch reason {
+        case "wake":
+            return "after wake"
+        case "network-restored":
+            return "after network restore"
+        default:
+            return reason
+        }
+    }
+
+    nonisolated static func formattedElapsedText(since date: Date, now: Date) -> String {
+        let interval = max(0, now.timeIntervalSince(date))
         if interval < 10 {
             return String(format: "%.1fs", interval)
         }

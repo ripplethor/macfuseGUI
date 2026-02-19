@@ -8,10 +8,45 @@
 
 import Foundation
 
+// RuntimeConfiguration centralizes timing thresholds that act as reliability and UX contracts.
+// Keep defaults stable unless you are intentionally changing behavior.
+struct RuntimeConfiguration: Sendable {
+    struct Remotes: Sendable {
+        var connectWatchdogTimeout: TimeInterval = 45
+        var disconnectWatchdogTimeout: TimeInterval = 10
+        var refreshWatchdogTimeout: TimeInterval = 18
+        var healthyPeriodicProbeInterval: TimeInterval = 60
+        // Keep periodic probe cadence configurable for tests and reliability tuning.
+        var periodicRecoveryPassInterval: TimeInterval = 15
+        // Queue label is configurable so tests can use predictable queue names.
+        var networkMonitorQueueLabel: String = "com.visualweb.macfusegui.network-monitor"
+    }
+
+    struct Unmount: Sendable {
+        var totalUnmountTimeout: TimeInterval = 10
+        var perCommandMaxTimeout: TimeInterval = 3
+    }
+
+    struct Browser: Sendable {
+        var breakerThreshold: Int = 8
+        var breakerWindow: TimeInterval = 30
+    }
+
+    struct Mount: Sendable {
+        var sshfsConnectCommandTimeout: TimeInterval = 20
+    }
+
+    var remotes = Remotes()
+    var unmount = Unmount()
+    var browser = Browser()
+    var mount = Mount()
+}
+
 @MainActor
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 final class AppEnvironment {
+    let runtimeConfiguration: RuntimeConfiguration
     let diagnosticsService: DiagnosticsService
     let redactionService: RedactionService
     let processRunner: ProcessRunner
@@ -34,6 +69,7 @@ final class AppEnvironment {
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init() {
+        runtimeConfiguration = RuntimeConfiguration()
         diagnosticsService = DiagnosticsService()
         redactionService = RedactionService()
         processRunner = ProcessRunner()
@@ -48,7 +84,9 @@ final class AppEnvironment {
         unmountService = UnmountService(
             runner: processRunner,
             diagnostics: diagnosticsService,
-            mountStateParser: mountStateParser
+            mountStateParser: mountStateParser,
+            totalUnmountTimeout: runtimeConfiguration.unmount.totalUnmountTimeout,
+            perCommandMaxTimeout: runtimeConfiguration.unmount.perCommandMaxTimeout
         )
         mountManager = MountManager(
             runner: processRunner,
@@ -57,14 +95,17 @@ final class AppEnvironment {
             unmountService: unmountService,
             mountStateParser: mountStateParser,
             diagnostics: diagnosticsService,
-            commandBuilder: mountCommandBuilder
+            commandBuilder: mountCommandBuilder,
+            sshfsConnectCommandTimeout: runtimeConfiguration.mount.sshfsConnectCommandTimeout
         )
         let browserTransport = LibSSH2SFTPTransport(
             diagnostics: diagnosticsService
         )
         let browserSessionManager = RemoteBrowserSessionManager(
             transport: browserTransport,
-            diagnostics: diagnosticsService
+            diagnostics: diagnosticsService,
+            breakerThreshold: runtimeConfiguration.browser.breakerThreshold,
+            breakerWindow: runtimeConfiguration.browser.breakerWindow
         )
         remoteDirectoryBrowserService = RemoteDirectoryBrowserService(
             manager: browserSessionManager,
@@ -84,7 +125,8 @@ final class AppEnvironment {
             mountManager: mountManager,
             remoteDirectoryBrowserService: remoteDirectoryBrowserService,
             diagnostics: diagnosticsService,
-            launchAtLoginService: launchAtLoginService
+            launchAtLoginService: launchAtLoginService,
+            runtimeConfiguration: runtimeConfiguration
         )
 
         let pluginSettingsWindowController = EditorPluginSettingsWindowController(
