@@ -7,6 +7,7 @@
 // Maintenance tip: Start reading top-to-bottom once, then follow one user action end-to-end through call sites.
 
 import Foundation
+import LocalAuthentication
 import Security
 
 /// Beginner note: This type groups related state and behavior for one part of the app.
@@ -18,9 +19,19 @@ protocol KeychainServiceProtocol {
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This can throw an error: callers should use do/try/catch or propagate the error.
     func readPassword(remoteID: String) throws -> String?
+    /// Beginner note: Use allowUserInteraction=false for background reads to avoid system auth popups.
+    /// This can throw an error: callers should use do/try/catch or propagate the error.
+    func readPassword(remoteID: String, allowUserInteraction: Bool) throws -> String?
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This can throw an error: callers should use do/try/catch or propagate the error.
     func deletePassword(remoteID: String) throws
+}
+
+extension KeychainServiceProtocol {
+    /// Beginner note: Default read keeps existing call sites interactive.
+    func readPassword(remoteID: String) throws -> String? {
+        try readPassword(remoteID: remoteID, allowUserInteraction: true)
+    }
 }
 
 /// Beginner note: This type groups related state and behavior for one part of the app.
@@ -72,18 +83,32 @@ final class KeychainService: KeychainServiceProtocol {
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This can throw an error: callers should use do/try/catch or propagate the error.
     func readPassword(remoteID: String) throws -> String? {
-        let query: [String: Any] = [
+        try readPassword(remoteID: remoteID, allowUserInteraction: true)
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    /// This can throw an error: callers should use do/try/catch or propagate the error.
+    func readPassword(remoteID: String, allowUserInteraction: Bool) throws -> String? {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: remoteID,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
+        if !allowUserInteraction {
+            let context = LAContext()
+            context.interactionNotAllowed = true
+            query[kSecUseAuthenticationContext as String] = context
+        }
 
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
         if status == errSecItemNotFound {
+            return nil
+        }
+        if status == errSecInteractionNotAllowed && !allowUserInteraction {
             return nil
         }
 

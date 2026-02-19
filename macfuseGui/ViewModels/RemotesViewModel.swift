@@ -154,8 +154,11 @@ final class RemotesViewModel: ObservableObject {
             self.keychainService = keychainService
         }
 
-        func readPassword(remoteID: String) throws -> String? {
-            try keychainService.readPassword(remoteID: remoteID)
+        func readPassword(remoteID: String, allowUserInteraction: Bool) throws -> String? {
+            try keychainService.readPassword(
+                remoteID: remoteID,
+                allowUserInteraction: allowUserInteraction
+            )
         }
     }
 
@@ -1164,16 +1167,26 @@ final class RemotesViewModel: ObservableObject {
 
         var password: String?
         if remote.authMode == .password {
+            let allowKeychainPrompt = trigger == .manual
             // Existing remotes reuse Keychain password; draft editor handles initial save.
-            password = await resolvedPasswordForRemote(remote.id)
+            password = await resolvedPasswordForRemote(
+                remote.id,
+                allowUserInteraction: allowKeychainPrompt
+            )
             if password?.isEmpty != false {
                 guard isOperationCurrent(remoteID: remoteID, operationID: operationID) else {
                     return
                 }
+                let errorMessage: String
+                if allowKeychainPrompt {
+                    errorMessage = "Password is missing. Edit remote and save password."
+                } else {
+                    errorMessage = "Keychain access needs approval. Click Connect once to allow access."
+                }
                 let status = RemoteStatus(
                     state: .error,
                     mountedPath: nil,
-                    lastError: "Password is missing. Edit remote and save password.",
+                    lastError: errorMessage,
                     updatedAt: Date()
                 )
                 observeStatus(status, for: remote.id)
@@ -2090,6 +2103,7 @@ final class RemotesViewModel: ObservableObject {
         let lower = message.lowercased()
         return lower.contains("authentication failed")
             || lower.contains("password is missing")
+            || lower.contains("keychain access needs approval")
             || lower.contains("permission denied")
             || lower.contains("private key")
             || lower.contains("local mount point is shared")
@@ -2806,7 +2820,11 @@ final class RemotesViewModel: ObservableObject {
 
     /// Beginner note: This method resolves password in a safe order:
     /// draft value -> in-memory cache -> keychain.
-    private func resolvedPasswordForRemote(_ remoteID: UUID, preferredDraftPassword: String? = nil) async -> String? {
+    private func resolvedPasswordForRemote(
+        _ remoteID: UUID,
+        preferredDraftPassword: String? = nil,
+        allowUserInteraction: Bool = true
+    ) async -> String? {
         if let preferredDraftPassword {
             let trimmed = preferredDraftPassword.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty {
@@ -2821,7 +2839,10 @@ final class RemotesViewModel: ObservableObject {
         }
 
         do {
-            let stored = try await readPasswordFromKeychainOffMain(remoteID: remoteID)
+            let stored = try await readPasswordFromKeychainOffMain(
+                remoteID: remoteID,
+                allowUserInteraction: allowUserInteraction
+            )
             if let stored, !stored.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 passwordCache[remoteID] = stored
                 return stored
@@ -2838,12 +2859,18 @@ final class RemotesViewModel: ObservableObject {
     }
 
     /// Beginner note: Keychain reads are executed off the main actor to keep UI responsive.
-    private func readPasswordFromKeychainOffMain(remoteID: UUID) async throws -> String? {
+    private func readPasswordFromKeychainOffMain(
+        remoteID: UUID,
+        allowUserInteraction: Bool
+    ) async throws -> String? {
         let keychainReader = backgroundKeychainReader
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
-                    let password = try keychainReader.readPassword(remoteID: remoteID.uuidString)
+                    let password = try keychainReader.readPassword(
+                        remoteID: remoteID.uuidString,
+                        allowUserInteraction: allowUserInteraction
+                    )
                     continuation.resume(returning: password)
                 } catch {
                     continuation.resume(throwing: error)
