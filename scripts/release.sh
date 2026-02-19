@@ -53,9 +53,12 @@ generate_changelog() {
     range_args=("HEAD")
   fi
 
-  # Generate a deterministic list from commit subjects. Exclude the auto release commit line.
+  # Generate a deterministic list from commit subjects.
+  # Exclude:
+  # - auto release commit line
+  # - docs commits (docs: / docs(scope):), so release notes stay focused on runtime changes
   git log --no-merges --pretty=format:'- %s (%h)' "${range_args[@]}" \
-    | sed -E '/^- Release v[0-9]+\.[0-9]+\.[0-9]+ \([0-9a-f]+\)$/d'
+    | sed -E '/^- Release v[0-9]+\.[0-9]+\.[0-9]+ \([0-9a-f]+\)$/d; /^- [Dd]ocs(\([^)]*\))?: /d'
 }
 
 write_release_notes_file() {
