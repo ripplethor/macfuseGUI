@@ -2956,7 +2956,14 @@ final class RemotesViewModel: ObservableObject {
         for remote in remotesForCleanup {
             let forceStopQueuedAt = Date()
             logMountCall(op: "forceStopProcesses", remoteID: remote.id, operationID: nil, queuedAt: forceStopQueuedAt)
-            await mountManager.forceStopProcesses(for: remote, queuedAt: forceStopQueuedAt, operationID: nil)
+            // Termination should not trigger Files & Folders "network volume" prompts.
+            // We stop sshfs pids only and skip force-unmount path access.
+            await mountManager.forceStopProcesses(
+                for: remote,
+                queuedAt: forceStopQueuedAt,
+                operationID: nil,
+                skipForceUnmount: true
+            )
             let disconnected = RemoteStatus(
                 state: .disconnected,
                 mountedPath: nil,

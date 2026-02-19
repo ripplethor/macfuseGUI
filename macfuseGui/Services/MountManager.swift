@@ -475,7 +475,8 @@ actor MountManager {
         for remote: RemoteConfig,
         queuedAt: Date = Date(),
         operationID: UUID? = nil,
-        aggressiveUnmount: Bool = false
+        aggressiveUnmount: Bool = false,
+        skipForceUnmount: Bool = false
     ) async {
         logActorQueueDelay(op: "forceStopProcesses", remote: remote, queuedAt: queuedAt, operationID: operationID)
         let normalizedMountPoint = URL(fileURLWithPath: remote.localMountPoint).standardizedFileURL.path
@@ -559,6 +560,15 @@ actor MountManager {
                 category: "mount",
                 message: "Force-stop sshfs failed for \(remote.displayName): \(error.localizedDescription)"
             )
+        }
+
+        if skipForceUnmount {
+            diagnostics.append(
+                level: .info,
+                category: "mount",
+                message: "Skipped force-unmount for \(remote.displayName) (termination cleanup)."
+            )
+            return
         }
 
         await forceUnmountMountPoint(
