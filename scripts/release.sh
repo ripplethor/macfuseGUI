@@ -31,6 +31,7 @@ APP_BUNDLE_X86_64_PATH="$REPO_ROOT/build/macfuseGui-x86_64.app"
 VOLNAME="macfuseGui"
 DMG_APP_BUNDLE_NAME="macFUSEGui.app"
 DMG_APPLICATIONS_LINK_NAME="Applications"
+DMG_INSTALLER_SCRIPT_NAME="Install macFUSEGui.command"
 DMG_ZLIB_LEVEL="${DMG_ZLIB_LEVEL:-9}"
 STRIP_DMG_PAYLOAD="${STRIP_DMG_PAYLOAD:-1}"
 
@@ -47,7 +48,7 @@ CREATED_DMG_PATHS=()
 CREATED_STAGE_DIRS=()
 CREATED_NOTES_FILE=""
 
-RELEASE_NOTES=$'Unsigned macOS build (NOT code signed / NOT notarized)\n\nmacOS will likely block it on first launch.\n\nHow to open:\n1) Download the DMG, drag the app to Applications.\n2) In Finder, right-click the app -> Open -> Open.\nOr: System Settings -> Privacy & Security -> Open Anyway (after the first block).'
+RELEASE_NOTES=$'Unsigned macOS build (NOT code signed / NOT notarized)\n\nmacOS may block first launch.\n\nRecommended install path:\n1) Open the DMG.\n2) Run "Install macFUSEGui.command" from the DMG.\n3) The installer copies the app to /Applications, clears quarantine, and opens it.\n\nManual fallback:\n1) Drag the app to Applications.\n2) In Finder, right-click the app -> Open -> Open.\nOr: System Settings -> Privacy & Security -> Open Anyway (after the first block).'
 
 generate_changelog() {
   local previous_tag="$1"
@@ -265,6 +266,48 @@ strip_staged_app_if_enabled() {
   strip -Sx "$executable_path"
 }
 
+write_dmg_installer_script() {
+  local stage_dir="$1"
+  local script_path="$stage_dir/$DMG_INSTALLER_SCRIPT_NAME"
+
+  cat > "$script_path" <<'EOF_INSTALLER'
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_NAME="macFUSEGui.app"
+SRC_APP="$SCRIPT_DIR/$APP_NAME"
+DST_APP="/Applications/$APP_NAME"
+
+if [[ ! -d "$SRC_APP" ]]; then
+  echo "App bundle not found next to installer script: $SRC_APP" >&2
+  exit 1
+fi
+
+echo "Installing $APP_NAME to /Applications..."
+if [[ -w "/Applications" ]]; then
+  rm -rf "$DST_APP"
+  ditto "$SRC_APP" "$DST_APP"
+else
+  sudo rm -rf "$DST_APP"
+  sudo ditto "$SRC_APP" "$DST_APP"
+fi
+
+echo "Clearing quarantine attribute..."
+if [[ -w "$DST_APP" ]]; then
+  xattr -dr com.apple.quarantine "$DST_APP" || true
+else
+  sudo xattr -dr com.apple.quarantine "$DST_APP" || true
+fi
+
+echo "Opening app..."
+open "$DST_APP"
+echo "Done."
+EOF_INSTALLER
+
+  chmod +x "$script_path"
+}
+
 ad_hoc_sign_staged_app_if_needed() {
   local staged_app_path="$1"
 
@@ -468,6 +511,7 @@ main() {
     for i in "${!resolved_app_bundle_paths[@]}"; do
       echo "[dry-run] Would stage app bundle as \"$DMG_APP_BUNDLE_NAME\" for DMG payload."
       echo "[dry-run] Would create /Applications symlink in DMG payload."
+      echo "[dry-run] Would add installer helper script: $DMG_INSTALLER_SCRIPT_NAME"
       if [[ "$STRIP_DMG_PAYLOAD" == "1" && "$CODE_SIGNING_ALLOWED" != "YES" ]]; then
         echo "[dry-run] Would strip staged app executable symbols before DMG create."
       fi
@@ -512,6 +556,7 @@ main() {
       echo "Staging app bundle for DMG payload: $staged_app_path"
       ditto "$current_app_path" "$staged_app_path"
       ln -s /Applications "$stage_dir/$DMG_APPLICATIONS_LINK_NAME"
+      write_dmg_installer_script "$stage_dir"
       strip_staged_app_if_enabled "$staged_app_path"
       ad_hoc_sign_staged_app_if_needed "$staged_app_path"
       CREATED_STAGE_DIRS+=("$stage_dir")
