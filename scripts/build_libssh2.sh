@@ -7,6 +7,19 @@ OPENSSL_VERSION="${OPENSSL_VERSION:-3.0.17}"
 MACOS_MIN_VERSION="${MACOS_MIN_VERSION:-13.0}"
 ARCH_OVERRIDE_VALUE="${ARCH_OVERRIDE:-arm64}"
 
+# Keep SSH compatibility ciphers/hashes intact, but strip TLS-only and
+# dynamic engine features that libssh2 does not use.
+OPENSSL_SAFE_MINIMIZE_FLAGS=(
+  no-ssl3
+  no-tls1
+  no-tls1_1
+  no-comp
+  no-engine
+  no-dso
+  no-psk
+  no-srp
+)
+
 LIBSSH2_URL="https://www.libssh2.org/download/libssh2-${LIBSSH2_VERSION}.tar.gz"
 OPENSSL_URL="https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz"
 
@@ -57,7 +70,8 @@ fi
 mkdir -p "$SOURCE_ROOT" "$LIBSSH2_OUTPUT_INCLUDE" "$LIBSSH2_OUTPUT_LIB" "$OPENSSL_OUTPUT_INCLUDE" "$OPENSSL_OUTPUT_LIB"
 
 ARCH_FINGERPRINT="$(IFS=,; echo "${ARCHES[*]}")"
-EXPECTED_FINGERPRINT="libssh2=${LIBSSH2_VERSION};openssl=${OPENSSL_VERSION};min=${MACOS_MIN_VERSION};archs=${ARCH_FINGERPRINT}"
+OPENSSL_FLAGS_FINGERPRINT="$(IFS=,; echo "${OPENSSL_SAFE_MINIMIZE_FLAGS[*]}")"
+EXPECTED_FINGERPRINT="libssh2=${LIBSSH2_VERSION};openssl=${OPENSSL_VERSION};min=${MACOS_MIN_VERSION};archs=${ARCH_FINGERPRINT};openssl_flags=${OPENSSL_FLAGS_FINGERPRINT}"
 
 have_cached_outputs() {
   [[ -f "$BUILD_INFO_FILE" ]] &&
@@ -148,7 +162,7 @@ build_openssl_arch() {
     CC="cc -arch $arch" \
     CFLAGS="-mmacosx-version-min=${MACOS_MIN_VERSION}" \
     LDFLAGS="-mmacosx-version-min=${MACOS_MIN_VERSION}" \
-    ./Configure "$openssl_target" no-shared no-tests "--prefix=$arch_build_root/install"
+    ./Configure "$openssl_target" no-shared no-tests "${OPENSSL_SAFE_MINIMIZE_FLAGS[@]}" "--prefix=$arch_build_root/install"
   run_logged "$make_log" run_for_arch "$arch" make -j"$(sysctl -n hw.ncpu)"
   run_logged "$install_log" run_for_arch "$arch" make install_sw
   popd >/dev/null
