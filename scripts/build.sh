@@ -15,6 +15,7 @@ SCHEME="macfuseGui"
 CONFIGURATION="${CONFIGURATION:-Debug}"
 ARCH_OVERRIDE="${ARCH_OVERRIDE:-arm64}"
 CODE_SIGNING_ALLOWED="${CODE_SIGNING_ALLOWED:-NO}"
+STRIP_RELEASE_BINARY="${STRIP_RELEASE_BINARY:-1}"
 OUTPUT_DIR="$ROOT_DIR/build"
 DEFAULT_OUTPUT_APP="$OUTPUT_DIR/macfuseGui.app"
 
@@ -89,6 +90,28 @@ verify_app_executable_arch() {
       exit 1
       ;;
   esac
+}
+
+strip_app_executable_if_enabled() {
+  local app_bundle="$1"
+  local executable_name executable_path
+
+  if [[ "$CONFIGURATION" != "Release" || "$STRIP_RELEASE_BINARY" != "1" ]]; then
+    return
+  fi
+  if [[ "$CODE_SIGNING_ALLOWED" == "YES" ]]; then
+    echo "Skipping release strip for signed build: $app_bundle"
+    return
+  fi
+
+  executable_name="$(resolve_bundle_executable_name "$app_bundle")"
+  executable_path="$app_bundle/Contents/MacOS/$executable_name"
+  [[ -f "$executable_path" ]] || {
+    echo "App executable not found for strip step: $executable_path" >&2
+    exit 1
+  }
+
+  strip -Sx "$executable_path"
 }
 
 run_xcodebuild_for_arch() {
@@ -171,6 +194,7 @@ build_single_variant() {
 
   rm -rf "$output_app"
   ditto "$product_app" "$output_app"
+  strip_app_executable_if_enabled "$output_app"
   verify_app_executable_arch "$output_app" "$build_arch"
   echo "Built: $output_app"
 }

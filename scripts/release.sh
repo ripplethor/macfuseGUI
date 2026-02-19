@@ -29,6 +29,8 @@ APP_BUNDLE_ARM64_PATH="$REPO_ROOT/build/macfuseGui-arm64.app"
 APP_BUNDLE_X86_64_PATH="$REPO_ROOT/build/macfuseGui-x86_64.app"
 VOLNAME="macfuseGui"
 DMG_APP_BUNDLE_NAME="macFUSEGui.app"
+DMG_ZLIB_LEVEL="${DMG_ZLIB_LEVEL:-9}"
+STRIP_DMG_PAYLOAD="${STRIP_DMG_PAYLOAD:-1}"
 
 CONFIGURATION="${CONFIGURATION:-Release}"
 ARCH_OVERRIDE="${ARCH_OVERRIDE:-both}"
@@ -226,6 +228,34 @@ bundle_newest_mtime() {
   stat -f %m "$bundle_path"
 }
 
+resolve_bundle_executable_name() {
+  local app_bundle="$1"
+  local info_plist="$app_bundle/Contents/Info.plist"
+  local executable_name=""
+
+  if [[ -f "$info_plist" ]]; then
+    executable_name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$info_plist" 2>/dev/null || true)"
+  fi
+  if [[ -z "$executable_name" ]]; then
+    executable_name="$(basename "$app_bundle" .app)"
+  fi
+  echo "$executable_name"
+}
+
+strip_staged_app_if_enabled() {
+  local staged_app_path="$1"
+  local executable_name executable_path
+
+  if [[ "$STRIP_DMG_PAYLOAD" != "1" || "$CODE_SIGNING_ALLOWED" == "YES" ]]; then
+    return
+  fi
+
+  executable_name="$(resolve_bundle_executable_name "$staged_app_path")"
+  executable_path="$staged_app_path/Contents/MacOS/$executable_name"
+  [[ -f "$executable_path" ]] || die "App executable not found in staged payload: $executable_path"
+  strip -Sx "$executable_path"
+}
+
 main() {
   require_cmd git
   require_cmd sed
@@ -339,6 +369,8 @@ main() {
   echo "Configuration:    $CONFIGURATION"
   echo "Arch override:    $ARCH_OVERRIDE_NORMALIZED"
   echo "Build skipped:    $SKIP_BUILD"
+  echo "DMG zlib level:   $DMG_ZLIB_LEVEL"
+  echo "Strip DMG app:    $STRIP_DMG_PAYLOAD"
   local dmg_path
   for dmg_path in "${DMG_PATHS[@]}"; do
     echo "DMG path:         $dmg_path"
@@ -395,7 +427,10 @@ main() {
     local i
     for i in "${!resolved_app_bundle_paths[@]}"; do
       echo "[dry-run] Would stage app bundle as \"$DMG_APP_BUNDLE_NAME\" for DMG payload."
-      echo "[dry-run] Would create DMG: hdiutil create -volname \"$VOLNAME\" -srcfolder \"<staging>/$DMG_APP_BUNDLE_NAME\" -ov -format UDZO \"${DMG_PATHS[$i]}\""
+      if [[ "$STRIP_DMG_PAYLOAD" == "1" && "$CODE_SIGNING_ALLOWED" != "YES" ]]; then
+        echo "[dry-run] Would strip staged app executable symbols before DMG create."
+      fi
+      echo "[dry-run] Would create DMG: hdiutil create -volname \"$VOLNAME\" -srcfolder \"<staging>/$DMG_APP_BUNDLE_NAME\" -ov -format UDZO -imagekey zlib-level=$DMG_ZLIB_LEVEL \"${DMG_PATHS[$i]}\""
     done
     echo "[dry-run] Would write VERSION=$new_version and commit: Release ${tag}"
     echo "[dry-run] Would create tag: $tag"
@@ -432,9 +467,10 @@ main() {
       echo "Using app bundle: $current_app_path"
       echo "Staging app bundle for DMG payload: $staged_app_path"
       ditto "$current_app_path" "$staged_app_path"
+      strip_staged_app_if_enabled "$staged_app_path"
       CREATED_STAGE_DIRS+=("$stage_dir")
       rm -f "$current_dmg_path"
-      hdiutil create -volname "$VOLNAME" -srcfolder "$staged_app_path" -ov -format UDZO "$current_dmg_path"
+      hdiutil create -volname "$VOLNAME" -srcfolder "$staged_app_path" -ov -format UDZO -imagekey "zlib-level=$DMG_ZLIB_LEVEL" "$current_dmg_path"
       if ! hdiutil verify "$current_dmg_path" >/dev/null 2>&1; then
         die "DMG verification failed: $current_dmg_path"
       fi
