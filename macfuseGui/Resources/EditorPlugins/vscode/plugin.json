@@ -5,28 +5,28 @@
   "defaultEnabled": true,
   "launchAttempts": [
     {
-      "label": "open bundle com.microsoft.VSCode",
+      "label": "open bundle com.microsoft.VSCode --args --reuse-window",
       "executable": "/usr/bin/open",
-      "arguments": ["-b", "com.microsoft.VSCode", "{folderPath}"],
-      "timeoutSeconds": 3
+      "arguments": ["-b", "com.microsoft.VSCode", "--args", "--reuse-window", "{folderPath}"],
+      "timeoutSeconds": 8
     },
     {
-      "label": "open bundle com.microsoft.VSCodeInsiders",
+      "label": "open bundle com.microsoft.VSCodeInsiders --args --reuse-window",
       "executable": "/usr/bin/open",
-      "arguments": ["-b", "com.microsoft.VSCodeInsiders", "{folderPath}"],
-      "timeoutSeconds": 3
+      "arguments": ["-b", "com.microsoft.VSCodeInsiders", "--args", "--reuse-window", "{folderPath}"],
+      "timeoutSeconds": 8
     },
     {
-      "label": "open app Visual Studio Code",
+      "label": "open app Visual Studio Code --args --reuse-window",
       "executable": "/usr/bin/open",
-      "arguments": ["-a", "Visual Studio Code", "{folderPath}"],
-      "timeoutSeconds": 3
+      "arguments": ["-a", "Visual Studio Code", "--args", "--reuse-window", "{folderPath}"],
+      "timeoutSeconds": 8
     },
     {
-      "label": "open app Visual Studio Code - Insiders",
+      "label": "open app Visual Studio Code - Insiders --args --reuse-window",
       "executable": "/usr/bin/open",
-      "arguments": ["-a", "Visual Studio Code - Insiders", "{folderPath}"],
-      "timeoutSeconds": 3
+      "arguments": ["-a", "Visual Studio Code - Insiders", "--args", "--reuse-window", "{folderPath}"],
+      "timeoutSeconds": 8
     },
     {
       "label": "code --reuse-window",

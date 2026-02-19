@@ -841,28 +841,28 @@ final class EditorPluginRegistry: ObservableObject {
                 defaultEnabled: true,
                 launchAttempts: [
                     EditorLaunchAttemptDefinition(
-                        label: "open bundle com.microsoft.VSCode",
+                        label: "open bundle com.microsoft.VSCode --args --reuse-window",
                         executable: "/usr/bin/open",
-                        arguments: ["-b", "com.microsoft.VSCode", folderPathPlaceholder],
-                        timeoutSeconds: 3
+                        arguments: ["-b", "com.microsoft.VSCode", "--args", "--reuse-window", folderPathPlaceholder],
+                        timeoutSeconds: 8
                     ),
                     EditorLaunchAttemptDefinition(
-                        label: "open bundle com.microsoft.VSCodeInsiders",
+                        label: "open bundle com.microsoft.VSCodeInsiders --args --reuse-window",
                         executable: "/usr/bin/open",
-                        arguments: ["-b", "com.microsoft.VSCodeInsiders", folderPathPlaceholder],
-                        timeoutSeconds: 3
+                        arguments: ["-b", "com.microsoft.VSCodeInsiders", "--args", "--reuse-window", folderPathPlaceholder],
+                        timeoutSeconds: 8
                     ),
                     EditorLaunchAttemptDefinition(
-                        label: "open app Visual Studio Code",
+                        label: "open app Visual Studio Code --args --reuse-window",
                         executable: "/usr/bin/open",
-                        arguments: ["-a", "Visual Studio Code", folderPathPlaceholder],
-                        timeoutSeconds: 3
+                        arguments: ["-a", "Visual Studio Code", "--args", "--reuse-window", folderPathPlaceholder],
+                        timeoutSeconds: 8
                     ),
                     EditorLaunchAttemptDefinition(
-                        label: "open app Visual Studio Code - Insiders",
+                        label: "open app Visual Studio Code - Insiders --args --reuse-window",
                         executable: "/usr/bin/open",
-                        arguments: ["-a", "Visual Studio Code - Insiders", folderPathPlaceholder],
-                        timeoutSeconds: 3
+                        arguments: ["-a", "Visual Studio Code - Insiders", "--args", "--reuse-window", folderPathPlaceholder],
+                        timeoutSeconds: 8
                     ),
                     EditorLaunchAttemptDefinition(
                         label: "code --reuse-window",
