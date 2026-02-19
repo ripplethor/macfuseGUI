@@ -88,7 +88,9 @@ final class KeychainService: KeychainServiceProtocol {
             return currentPassword
         }
 
-        if !allowUserInteraction && !allowLegacyFallbackForNonInteractiveReads {
+        // Product policy: never query legacy keychain service during runtime reads.
+        // Legacy interactive reads are a known source of repeated authorization prompts.
+        if !allowLegacyFallbackForNonInteractiveReads {
             return nil
         }
 
