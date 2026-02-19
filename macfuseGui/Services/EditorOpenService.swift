@@ -60,6 +60,7 @@ struct EditorOpenResult: Sendable {
 final class EditorOpenService {
     private let pluginRegistry: EditorPluginRegistry
     private let runner: ProcessRunning
+    private let fileManager: FileManager
     private let folderPathPlaceholder = "{folderPath}"
     private let additionalEditorPATHEntries = [
         "/opt/homebrew/bin",
@@ -73,11 +74,17 @@ final class EditorOpenService {
         "/Applications/VSCodium.app/Contents/Resources/app/bin",
         "/Applications/Cursor.app/Contents/Resources/app/bin"
     ]
+    private var cachedDiscoveredEditorPATHEntries: [String]?
 
     /// Beginner note: Initializers create valid state before any other method is used.
-    init(pluginRegistry: EditorPluginRegistry, runner: ProcessRunning) {
+    init(
+        pluginRegistry: EditorPluginRegistry,
+        runner: ProcessRunning,
+        fileManager: FileManager = .default
+    ) {
         self.pluginRegistry = pluginRegistry
         self.runner = runner
+        self.fileManager = fileManager
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -124,12 +131,12 @@ final class EditorOpenService {
 
                 attempts.append(launchAttemptResult)
 
-                if shouldRetryLegacyVSCodeOpen(
+                if shouldRetryOpenWithArgsFallback(
                     attempt: attempt,
                     result: launchAttemptResult,
                     folderPath: folderURL.path
                 ),
-                let fallbackArguments = upgradedVSCodeOpenArguments(
+                let fallbackArguments = upgradedOpenArguments(
                     from: resolvedArguments,
                     folderPath: folderURL.path
                 ) {
@@ -140,7 +147,7 @@ final class EditorOpenService {
                     )
 
                     let fallbackLaunchAttemptResult = EditorLaunchAttemptResult(
-                        label: "\(attempt.label) (legacy fallback --args --reuse-window)",
+                        label: "\(attempt.label) (compat fallback --args)",
                         executable: attempt.executable,
                         arguments: fallbackArguments,
                         timeoutSeconds: max(attempt.timeoutSeconds, 8),
@@ -271,14 +278,18 @@ final class EditorOpenService {
             .split(separator: ":")
             .map(String.init) ?? []
 
+        let discovered = discoveredEditorPATHEntries()
         for entry in additionalEditorPATHEntries where !pathEntries.contains(entry) {
+            pathEntries.append(entry)
+        }
+        for entry in discovered where !pathEntries.contains(entry) {
             pathEntries.append(entry)
         }
 
         return ["PATH": pathEntries.joined(separator: ":")]
     }
 
-    private func shouldRetryLegacyVSCodeOpen(
+    private func shouldRetryOpenWithArgsFallback(
         attempt: EditorLaunchAttemptDefinition,
         result: EditorLaunchAttemptResult,
         folderPath: String
@@ -295,16 +306,10 @@ final class EditorOpenService {
         guard result.arguments.contains(folderPath) else {
             return false
         }
-        let joinedArgs = result.arguments.joined(separator: " ").lowercased()
-        guard joinedArgs.contains("visual studio code") || joinedArgs.contains("com.microsoft.vscode") else {
-            return false
-        }
-
-        let output = result.output.lowercased()
-        return output.contains("error -36") || output.contains("_lsopenurlswithcompletionhandler")
+        return true
     }
 
-    private func upgradedVSCodeOpenArguments(from arguments: [String], folderPath: String) -> [String]? {
+    private func upgradedOpenArguments(from arguments: [String], folderPath: String) -> [String]? {
         guard !arguments.contains("--args") else {
             return nil
         }
@@ -314,7 +319,58 @@ final class EditorOpenService {
 
         var upgraded = arguments
         upgraded.remove(at: folderIndex)
-        upgraded.append(contentsOf: ["--args", "--reuse-window", folderPath])
+        upgraded.append("--args")
+        if shouldAddReuseWindowArgument(for: arguments) {
+            upgraded.append("--reuse-window")
+        }
+        upgraded.append(folderPath)
         return upgraded
+    }
+
+    private func shouldAddReuseWindowArgument(for arguments: [String]) -> Bool {
+        let joined = arguments.joined(separator: " ").lowercased()
+        return joined.contains("visual studio code")
+            || joined.contains("com.microsoft.vscode")
+            || joined.contains("com.microsoft.vscodeinsiders")
+    }
+
+    private func discoveredEditorPATHEntries() -> [String] {
+        if let cachedDiscoveredEditorPATHEntries {
+            return cachedDiscoveredEditorPATHEntries
+        }
+
+        var discovered: [String] = []
+        var seen: Set<String> = []
+        let roots = [
+            URL(fileURLWithPath: "/Applications", isDirectory: true),
+            fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true)
+        ]
+
+        for root in roots where fileManager.fileExists(atPath: root.path) {
+            guard let appURLs = try? fileManager.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            ) else {
+                continue
+            }
+
+            for appURL in appURLs where appURL.pathExtension.lowercased() == "app" {
+                let candidateDirectories = [
+                    appURL.appendingPathComponent("Contents/Resources/app/bin", isDirectory: true),
+                    appURL.appendingPathComponent("Contents/Resources/bin", isDirectory: true),
+                    appURL.appendingPathComponent("Contents/MacOS", isDirectory: true)
+                ]
+
+                for candidate in candidateDirectories where fileManager.fileExists(atPath: candidate.path) {
+                    if seen.insert(candidate.path).inserted {
+                        discovered.append(candidate.path)
+                    }
+                }
+            }
+        }
+
+        cachedDiscoveredEditorPATHEntries = discovered
+        return discovered
     }
 }

@@ -41,8 +41,16 @@ final class EditorOpenServiceTests: XCTestCase {
         registry.setPluginActive(true, pluginID: "cursor")
         registry.setPreferredPlugin("cursor")
 
-        // Cursor has 3 attempts; all fail. Then VS Code first attempt succeeds.
-        let runner = FakeEditorRunner(scriptedResults: [.failure(), .failure(), .failure(), .success()])
+        // Cursor open attempts now include compatibility retries for legacy open-style invocations.
+        // 1: cursor open -b fail
+        // 2: cursor open -b compat retry fail
+        // 3: cursor open -a fail
+        // 4: cursor open -a compat retry fail
+        // 5: cursor env fail
+        // 6: vscode first attempt succeeds
+        let runner = FakeEditorRunner(scriptedResults: [
+            .failure(), .failure(), .failure(), .failure(), .failure(), .success()
+        ])
         let service = EditorOpenService(pluginRegistry: registry, runner: runner)
 
         let folderURL = URL(fileURLWithPath: "/tmp/editor-open-tests/project", isDirectory: true)
@@ -54,7 +62,8 @@ final class EditorOpenServiceTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.launchedPluginID, "vscode")
-        XCTAssertEqual(result.pluginResults.count, 2)
+        XCTAssertEqual(result.pluginResults.count, 2, "Plugin results: \(result.pluginResults)")
+        guard result.pluginResults.count == 2 else { return }
         XCTAssertEqual(result.pluginResults[0].pluginID, "cursor")
         XCTAssertFalse(result.pluginResults[0].success)
         XCTAssertEqual(result.pluginResults[1].pluginID, "vscode")
@@ -218,9 +227,59 @@ final class EditorOpenServiceTests: XCTestCase {
         )
 
         let invocations = await runner.invocations()
-        XCTAssertEqual(invocations.count, 2)
+        XCTAssertEqual(invocations.count, 2, "Invocations: \(invocations)")
+        guard invocations.count == 2 else { return }
         XCTAssertEqual(invocations[0].arguments, ["-a", "Visual Studio Code", folderPath])
         XCTAssertEqual(invocations[1].arguments, ["-a", "Visual Studio Code", "--args", "--reuse-window", folderPath])
+    }
+
+    /// Beginner note: Non-VS Code editors should also get a compatibility retry without VS Code-only flags.
+    func testLegacyCustomOpenArgumentsRetryWithArgsMode() async throws {
+        let context = try makeContext()
+        let pluginsDirectory = try createPluginsDirectory(appSupportDirectory: context.appSupportDirectory)
+        let legacyManifest = """
+        {
+          "id": "legacycustom",
+          "displayName": "Legacy Custom",
+          "priority": 6,
+          "defaultEnabled": true,
+          "launchAttempts": [
+            {
+              "label": "open app Windsurf",
+              "executable": "/usr/bin/open",
+              "arguments": ["-a", "Windsurf", "{folderPath}"],
+              "timeoutSeconds": 3
+            }
+          ]
+        }
+        """
+        try legacyManifest.write(
+            to: pluginsDirectory.appendingPathComponent("legacycustom.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let registry = makeRegistry(context: context)
+        let runner = FakeEditorRunner(
+            scriptedResults: [
+                .failure(stderr: "_LSOpenURLsWithCompletionHandler() failed with error -36"),
+                .success()
+            ]
+        )
+        let service = EditorOpenService(pluginRegistry: registry, runner: runner)
+
+        let folderPath = "/tmp/editor-open-tests/project"
+        _ = await service.open(
+            folderURL: URL(fileURLWithPath: folderPath, isDirectory: true),
+            remoteName: "Remote Custom",
+            mode: .explicit(pluginID: "legacycustom")
+        )
+
+        let invocations = await runner.invocations()
+        XCTAssertEqual(invocations.count, 2, "Invocations: \(invocations)")
+        guard invocations.count == 2 else { return }
+        XCTAssertEqual(invocations[0].arguments, ["-a", "Windsurf", folderPath])
+        XCTAssertEqual(invocations[1].arguments, ["-a", "Windsurf", "--args", folderPath])
     }
 
     private func makeRegistry(context: (appSupportDirectory: URL, defaults: UserDefaults)) -> EditorPluginRegistry {
