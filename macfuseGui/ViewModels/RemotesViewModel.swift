@@ -802,27 +802,59 @@ final class RemotesViewModel: ObservableObject {
             )
         }
 
-        // Startup uses sequential connect attempts to avoid concurrent keychain access prompts.
-        for remote in launchTargets {
-            guard remotes.contains(where: { $0.id == remote.id }) else {
-                continue
-            }
+        let connectTargets = launchTargets.filter { status(for: $0.id).state != .connected }
+        await primeStartupPasswordCache(for: connectTargets)
 
-            if status(for: remote.id).state == .connected {
-                desiredConnections.insert(remote.id)
-                reconnectAttempts[remote.id] = 0
-                reconnectInFlight.remove(remote.id)
-                continue
-            }
+        await withTaskGroup(of: Void.self) { group in
+            for remote in launchTargets {
+                group.addTask { @MainActor [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    guard self.remotes.contains(where: { $0.id == remote.id }) else {
+                        return
+                    }
 
-            await connect(
-                remoteID: remote.id,
-                trigger: .startup,
-                suppressUserAlerts: true
-            )
+                    if self.status(for: remote.id).state == .connected {
+                        self.desiredConnections.insert(remote.id)
+                        self.reconnectAttempts[remote.id] = 0
+                        self.reconnectInFlight.remove(remote.id)
+                        return
+                    }
+
+                    await self.connect(
+                        remoteID: remote.id,
+                        trigger: .startup,
+                        suppressUserAlerts: true
+                    )
+                }
+            }
+            await group.waitForAll()
         }
 
         pendingStartupAutoConnectIDs.subtract(launchTargets.map(\.id))
+    }
+
+    /// Beginner note: Startup keychain access is primed sequentially to avoid concurrent auth prompts.
+    /// After priming, connects run in parallel using cached passwords.
+    private func primeStartupPasswordCache(for remotes: [RemoteConfig]) async {
+        let passwordRemotes = remotes.filter { $0.authMode == .password }
+        guard !passwordRemotes.isEmpty else {
+            return
+        }
+
+        var hasAttemptedInteractiveUnlock = false
+        for remote in passwordRemotes {
+            // Allow one interactive read to unlock keychain, then continue non-interactively.
+            let allowInteraction = !hasAttemptedInteractiveUnlock
+            _ = await resolvedPasswordForRemote(
+                remote.id,
+                allowUserInteraction: allowInteraction
+            )
+            if allowInteraction {
+                hasAttemptedInteractiveUnlock = true
+            }
+        }
     }
 
     /// Beginner note: Emergency user action that aggressively tears down all mount processes.
