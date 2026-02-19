@@ -11,7 +11,8 @@ set -euo pipefail
 # Flow:
 # - require clean git working tree
 # - optional dry-run mode (--dry-run / -n): print actions only, no release side effects
-# - resolve base version from max(VERSION, latest vX.Y.Z tag)
+# - use origin release tags as source of truth and realign local release tags
+# - resolve base version from max(VERSION, latest origin vX.Y.Z tag)
 # - bump patch version
 # - build app bundle (Release by default)
 # - create DMG(s) from build output app bundle(s)
@@ -182,12 +183,33 @@ bump_patch() {
   echo "${major}.${minor}.${patch}"
 }
 
-latest_tag_version() {
-  git tag -l 'v[0-9]*.[0-9]*.[0-9]*' \
+list_remote_release_tags() {
+  git ls-remote --tags --refs origin 'refs/tags/v[0-9]*.[0-9]*.[0-9]*' \
+    | awk '{print $2}' \
+    | sed 's#refs/tags/##' \
+    | awk 'NF'
+}
+
+latest_remote_tag_version() {
+  local remote_tags="$1"
+  printf '%s\n' "$remote_tags" \
     | sed 's/^v//' \
     | awk 'NF' \
     | sort -V \
     | tail -n 1
+}
+
+sync_local_release_tags_with_origin() {
+  local remote_tags="$1"
+  local local_tag
+
+  while IFS= read -r local_tag; do
+    [[ -n "$local_tag" ]] || continue
+    if ! printf '%s\n' "$remote_tags" | grep -Fxq "$local_tag"; then
+      git tag -d "$local_tag" >/dev/null
+      echo "Pruned local tag not on origin: $local_tag"
+    fi
+  done < <(git tag -l 'v[0-9]*.[0-9]*.[0-9]*')
 }
 
 max_version() {
@@ -286,12 +308,23 @@ main() {
   [[ -n "$branch" ]] || die "Detached HEAD is not supported for release."
 
   require_clean_tree
+  local remote_release_tags=""
   if [[ "$DRY_RUN" == "1" ]]; then
     echo "[dry-run] Would run: git fetch --tags origin"
     echo "[dry-run] Would run: git merge --ff-only origin/$branch"
+    remote_release_tags="$(list_remote_release_tags)" || die "Failed to list origin tags."
+    local local_tag
+    while IFS= read -r local_tag; do
+      [[ -n "$local_tag" ]] || continue
+      if ! printf '%s\n' "$remote_release_tags" | grep -Fxq "$local_tag"; then
+        echo "[dry-run] Would delete local tag not on origin: $local_tag"
+      fi
+    done < <(git tag -l 'v[0-9]*.[0-9]*.[0-9]*')
   else
     git fetch --tags origin >/dev/null 2>&1 || die "Failed to fetch from origin."
     git merge --ff-only "origin/$branch" >/dev/null 2>&1 || die "Local branch is behind origin. Run: git pull"
+    remote_release_tags="$(list_remote_release_tags)" || die "Failed to list origin tags."
+    sync_local_release_tags_with_origin "$remote_release_tags"
   fi
 
   if [[ "$DRY_RUN" != "1" ]]; then
@@ -309,7 +342,7 @@ main() {
   fi
 
   local version_from_tag
-  version_from_tag="$(latest_tag_version)"
+  version_from_tag="$(latest_remote_tag_version "$remote_release_tags")"
   if [[ -n "$version_from_tag" ]] && ! is_valid_version "$version_from_tag"; then
     die "Invalid tag version discovered: '$version_from_tag'"
   fi
