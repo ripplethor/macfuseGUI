@@ -28,6 +28,7 @@ APP_BUNDLE_PATH="$REPO_ROOT/build/macfuseGui.app"
 APP_BUNDLE_ARM64_PATH="$REPO_ROOT/build/macfuseGui-arm64.app"
 APP_BUNDLE_X86_64_PATH="$REPO_ROOT/build/macfuseGui-x86_64.app"
 VOLNAME="macfuseGui"
+DMG_APP_BUNDLE_NAME="macFUSEGui.app"
 
 CONFIGURATION="${CONFIGURATION:-Release}"
 ARCH_OVERRIDE="${ARCH_OVERRIDE:-both}"
@@ -39,6 +40,7 @@ DRY_RUN=0
 ARCH_OVERRIDE_NORMALIZED=""
 DMG_PATHS=()
 CREATED_DMG_PATHS=()
+CREATED_STAGE_DIRS=()
 CREATED_NOTES_FILE=""
 
 RELEASE_NOTES=$'Unsigned macOS build (NOT code signed / NOT notarized)\n\nmacOS will likely block it on first launch.\n\nHow to open:\n1) Download the DMG, drag the app to Applications.\n2) In Finder, right-click the app -> Open -> Open.\nOr: System Settings -> Privacy & Security -> Open Anyway (after the first block).'
@@ -112,6 +114,12 @@ cleanup() {
   for dmg in "${CREATED_DMG_PATHS[@]}"; do
     if [[ -n "$dmg" && -f "$dmg" ]]; then
       rm -f "$dmg"
+    fi
+  done
+  local stage_dir
+  for stage_dir in "${CREATED_STAGE_DIRS[@]}"; do
+    if [[ -n "$stage_dir" && -d "$stage_dir" ]]; then
+      rm -rf "$stage_dir"
     fi
   done
   if [[ -n "$CREATED_NOTES_FILE" && -f "$CREATED_NOTES_FILE" ]]; then
@@ -222,6 +230,7 @@ main() {
   require_cmd git
   require_cmd sed
   require_cmd awk
+  require_cmd ditto
   require_cmd hdiutil
   if [[ "$DRY_RUN" != "1" ]]; then
     require_cmd gh
@@ -385,7 +394,8 @@ main() {
   if [[ "$DRY_RUN" == "1" ]]; then
     local i
     for i in "${!resolved_app_bundle_paths[@]}"; do
-      echo "[dry-run] Would create DMG: hdiutil create -volname \"$VOLNAME\" -srcfolder \"${resolved_app_bundle_paths[$i]}\" -ov -format UDZO \"${DMG_PATHS[$i]}\""
+      echo "[dry-run] Would stage app bundle as \"$DMG_APP_BUNDLE_NAME\" for DMG payload."
+      echo "[dry-run] Would create DMG: hdiutil create -volname \"$VOLNAME\" -srcfolder \"<staging>/$DMG_APP_BUNDLE_NAME\" -ov -format UDZO \"${DMG_PATHS[$i]}\""
     done
     echo "[dry-run] Would write VERSION=$new_version and commit: Release ${tag}"
     echo "[dry-run] Would create tag: $tag"
@@ -413,13 +423,18 @@ main() {
 
     local i
     for i in "${!resolved_app_bundle_paths[@]}"; do
-      local current_app_path current_dmg_path
+      local current_app_path current_dmg_path stage_dir staged_app_path
       current_app_path="${resolved_app_bundle_paths[$i]}"
       current_dmg_path="${DMG_PATHS[$i]}"
+      stage_dir="$(mktemp -d -t macfusegui-release-stage.XXXXXX)"
+      staged_app_path="$stage_dir/$DMG_APP_BUNDLE_NAME"
 
       echo "Using app bundle: $current_app_path"
+      echo "Staging app bundle for DMG payload: $staged_app_path"
+      ditto "$current_app_path" "$staged_app_path"
+      CREATED_STAGE_DIRS+=("$stage_dir")
       rm -f "$current_dmg_path"
-      hdiutil create -volname "$VOLNAME" -srcfolder "$current_app_path" -ov -format UDZO "$current_dmg_path"
+      hdiutil create -volname "$VOLNAME" -srcfolder "$staged_app_path" -ov -format UDZO "$current_dmg_path"
       if ! hdiutil verify "$current_dmg_path" >/dev/null 2>&1; then
         die "DMG verification failed: $current_dmg_path"
       fi
@@ -450,6 +465,10 @@ main() {
       rm -f "$dmg_path"
     done
     CREATED_DMG_PATHS=()
+    for stage_dir in "${CREATED_STAGE_DIRS[@]}"; do
+      rm -rf "$stage_dir"
+    done
+    CREATED_STAGE_DIRS=()
   fi
 
   if [[ "$DRY_RUN" == "1" ]]; then
