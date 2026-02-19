@@ -36,6 +36,15 @@ final class EditorPluginRegistry: ObservableObject {
     private let exampleTemplateFileName = "custom-editor.json.template"
     private let bundledBuiltInPluginsFolderName = "EditorPlugins"
     private let bundledPluginManifestFileName = "plugin.json"
+    private let maxLaunchAttemptsPerPlugin = 10
+    private let maxArgumentsPerLaunchAttempt = 20
+    private let allowedEnvCommands: Set<String> = [
+        "code",
+        "code-insiders",
+        "codium",
+        "cursor",
+        "zed"
+    ]
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init(
@@ -617,6 +626,11 @@ final class EditorPluginRegistry: ObservableObject {
         guard !manifest.launchAttempts.isEmpty else {
             throw AppError.validationFailed(["\(fileName): At least one launch attempt is required."])
         }
+        guard manifest.launchAttempts.count <= maxLaunchAttemptsPerPlugin else {
+            throw AppError.validationFailed([
+                "\(fileName): launchAttempts has \(manifest.launchAttempts.count) entries; maximum is \(maxLaunchAttemptsPerPlugin)."
+            ])
+        }
 
         let priority = max(0, manifest.priority)
 
@@ -656,10 +670,21 @@ final class EditorPluginRegistry: ObservableObject {
         guard !candidate.arguments.isEmpty else {
             throw AppError.validationFailed(["\(fileName): launchAttempts[\(index)] arguments cannot be empty."])
         }
+        guard candidate.arguments.count <= maxArgumentsPerLaunchAttempt else {
+            throw AppError.validationFailed([
+                "\(fileName): launchAttempts[\(index)] has \(candidate.arguments.count) arguments; maximum is \(maxArgumentsPerLaunchAttempt)."
+            ])
+        }
 
-        guard candidate.arguments.contains(where: { $0.contains(folderPathPlaceholder) }) else {
+        let placeholderCount = placeholderOccurrences(in: candidate.arguments)
+        guard placeholderCount > 0 else {
             throw AppError.validationFailed([
                 "\(fileName): launchAttempts[\(index)] must include {folderPath} placeholder."
+            ])
+        }
+        guard placeholderCount == 1 else {
+            throw AppError.validationFailed([
+                "\(fileName): launchAttempts[\(index)] must include {folderPath} exactly once."
             ])
         }
 
@@ -691,6 +716,28 @@ final class EditorPluginRegistry: ObservableObject {
                     "\(fileName): launchAttempts[\(index)] /usr/bin/env form must start with a bare command token."
                 ])
             }
+
+            let normalizedCommand = command.lowercased()
+            guard allowedEnvCommands.contains(normalizedCommand) else {
+                throw AppError.validationFailed([
+                    "\(fileName): launchAttempts[\(index)] /usr/bin/env command '\(command)' is not allowed."
+                ])
+            }
+
+            guard candidate.arguments.last == folderPathPlaceholder else {
+                throw AppError.validationFailed([
+                    "\(fileName): launchAttempts[\(index)] /usr/bin/env form must place {folderPath} as the final argument."
+                ])
+            }
+
+            let optionArguments = candidate.arguments.dropFirst().dropLast()
+            for option in optionArguments {
+                guard option.range(of: "^-{1,2}[A-Za-z0-9][A-Za-z0-9._-]*(=[A-Za-z0-9._:/-]+)?$", options: .regularExpression) != nil else {
+                    throw AppError.validationFailed([
+                        "\(fileName): launchAttempts[\(index)] /usr/bin/env option '\(option)' is not allowed."
+                    ])
+                }
+            }
         }
 
         let timeout = clampedTimeout(candidate.timeoutSeconds)
@@ -706,6 +753,13 @@ final class EditorPluginRegistry: ObservableObject {
     private func clampedTimeout(_ timeout: TimeInterval?) -> TimeInterval {
         let raw = timeout ?? 3
         return min(10, max(1, raw))
+    }
+
+    private func placeholderOccurrences(in arguments: [String]) -> Int {
+        arguments.reduce(0) { count, argument in
+            let segments = argument.components(separatedBy: folderPathPlaceholder)
+            return count + max(0, segments.count - 1)
+        }
     }
 
     private func builtInCatalog(issues: inout [EditorPluginLoadIssue]) -> [EditorPluginDefinition] {

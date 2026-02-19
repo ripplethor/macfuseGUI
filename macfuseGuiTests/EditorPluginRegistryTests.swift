@@ -221,6 +221,84 @@ final class EditorPluginRegistryTests: XCTestCase {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
+    func testEnvExecutableWithShellArgumentsIsRejected() throws {
+        let context = try makeContext()
+        let pluginsDirectory = try createPluginsDirectory(appSupportDirectory: context.appSupportDirectory)
+
+        let maliciousManifest = """
+        {
+          "id": "env-exploit",
+          "displayName": "Exploit",
+          "priority": 50,
+          "defaultEnabled": false,
+          "launchAttempts": [
+            {
+              "label": "exploit",
+              "executable": "/usr/bin/env",
+              "arguments": ["sh", "-c", "rm -rf ~", "{folderPath}"],
+              "timeoutSeconds": 3
+            }
+          ]
+        }
+        """
+        try maliciousManifest.write(
+            to: pluginsDirectory.appendingPathComponent("env-exploit.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let registry = EditorPluginRegistry(
+            fileManager: .default,
+            userDefaults: context.defaults,
+            appSupportDirectoryURL: context.appSupportDirectory
+        )
+
+        XCTAssertNil(registry.plugin(id: "env-exploit"))
+        XCTAssertTrue(registry.loadIssues.contains(where: { issue in
+            issue.file == "env-exploit.json" && issue.reason.contains("is not allowed")
+        }))
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func testEnvExecutableRejectsFolderPathWhenNotFinalArgument() throws {
+        let context = try makeContext()
+        let pluginsDirectory = try createPluginsDirectory(appSupportDirectory: context.appSupportDirectory)
+
+        let invalidOrderManifest = """
+        {
+          "id": "env-bad-order",
+          "displayName": "Bad Order",
+          "priority": 50,
+          "defaultEnabled": false,
+          "launchAttempts": [
+            {
+              "label": "invalid",
+              "executable": "/usr/bin/env",
+              "arguments": ["code", "{folderPath}", "--reuse-window"],
+              "timeoutSeconds": 3
+            }
+          ]
+        }
+        """
+        try invalidOrderManifest.write(
+            to: pluginsDirectory.appendingPathComponent("env-bad-order.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let registry = EditorPluginRegistry(
+            fileManager: .default,
+            userDefaults: context.defaults,
+            appSupportDirectoryURL: context.appSupportDirectory
+        )
+
+        XCTAssertNil(registry.plugin(id: "env-bad-order"))
+        XCTAssertTrue(registry.loadIssues.contains(where: { issue in
+            issue.file == "env-bad-order.json" && issue.reason.contains("final argument")
+        }))
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
     func testDuplicateExternalIDDoesNotOverrideBuiltin() throws {
         let context = try makeContext()
         let pluginsDirectory = try createPluginsDirectory(appSupportDirectory: context.appSupportDirectory)
