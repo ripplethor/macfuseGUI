@@ -298,6 +298,11 @@ strip_staged_app_if_enabled() {
   executable_name="$(resolve_bundle_executable_name "$staged_app_path")"
   executable_path="$staged_app_path/Contents/MacOS/$executable_name"
   [[ -f "$executable_path" ]] || die "App executable not found in staged payload: $executable_path"
+
+  # Avoid noisy strip warnings by removing any existing signature before mutating
+  # the Mach-O payload. DMG staging re-signs the bundle immediately afterwards.
+  codesign --remove-signature "$staged_app_path" >/dev/null 2>&1 || true
+  codesign --remove-signature "$executable_path" >/dev/null 2>&1 || true
   strip -Sx "$executable_path"
 }
 
