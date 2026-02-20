@@ -706,6 +706,16 @@ final class EditorPluginRegistry: ObservableObject {
                     "\(fileName): launchAttempts[\(index)] /usr/bin/env form must start with a bare command token."
                 ])
             }
+            guard !candidate.arguments.contains("sh") && !candidate.arguments.contains("-c") else {
+                throw AppError.validationFailed([
+                    "\(fileName): launchAttempts[\(index)] /usr/bin/env form cannot contain shell commands."
+                ])
+            }
+            guard candidate.arguments.last == folderPathPlaceholder else {
+                throw AppError.validationFailed([
+                    "\(fileName): launchAttempts[\(index)] /usr/bin/env form must have {folderPath} as the final argument."
+                ])
+            }
         }
 
         let timeout = clampedTimeout(candidate.timeoutSeconds)
@@ -814,12 +824,6 @@ final class EditorPluginRegistry: ObservableObject {
                 defaultEnabled: true,
                 launchAttempts: [
                     EditorLaunchAttemptDefinition(
-                        label: "code --reuse-window",
-                        executable: "/usr/bin/env",
-                        arguments: ["code", "--reuse-window", folderPathPlaceholder],
-                        timeoutSeconds: 3
-                    ),
-                    EditorLaunchAttemptDefinition(
                         label: "open bundle com.microsoft.VSCode",
                         executable: "/usr/bin/open",
                         arguments: ["-b", "com.microsoft.VSCode", folderPathPlaceholder],
@@ -841,6 +845,12 @@ final class EditorPluginRegistry: ObservableObject {
                         label: "open app Visual Studio Code - Insiders",
                         executable: "/usr/bin/open",
                         arguments: ["-a", "Visual Studio Code - Insiders", folderPathPlaceholder],
+                        timeoutSeconds: 3
+                    ),
+                    EditorLaunchAttemptDefinition(
+                        label: "code --reuse-window",
+                        executable: "/usr/bin/env",
+                        arguments: ["code", "--reuse-window", folderPathPlaceholder],
                         timeoutSeconds: 3
                     )
                 ],

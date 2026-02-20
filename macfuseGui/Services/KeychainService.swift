@@ -39,11 +39,16 @@ extension KeychainServiceProtocol {
 final class KeychainService: KeychainServiceProtocol {
     static let currentService = "com.visualweb.macfusegui.password.v2"
     static let legacyService = "com.visualweb.macfusegui.password"
-    // Prevent background connect flows from touching legacy items that may trigger macOS auth UI.
-    private let allowLegacyFallbackForNonInteractiveReads = false
+    static let aggregateService = "com.visualweb.macfusegui.passwords.v2"
+    static let aggregateAccount = "macfuseGui.passwords.v2"
+    // Product policy: reads in app flows should stay non-interactive.
+    private let allowInteractiveReads = false
 
     private let service: String
     private let legacyServices: [String]
+    private let passwordCacheLock = NSLock()
+    private var passwordCache: [String: String] = [:]
+    private let aggregateLock = NSLock()
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init(service: String = KeychainService.currentService, legacyServices: [String]? = nil) {
@@ -60,15 +65,21 @@ final class KeychainService: KeychainServiceProtocol {
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This can throw an error: callers should use do/try/catch or propagate the error.
     func savePassword(remoteID: String, password: String) throws {
-        guard let passwordData = password.data(using: .utf8) else {
+        guard password.data(using: .utf8) != nil else {
             throw AppError.keychainError("Failed to convert password to data")
         }
+        cachePassword(password, for: remoteID)
 
-        try upsertPassword(remoteID: remoteID, passwordData: passwordData, service: service)
-
-        for legacyService in legacyServices {
-            _ = deletePasswordStatus(remoteID: remoteID, service: legacyService)
+        aggregateLock.lock()
+        defer { aggregateLock.unlock() }
+        var aggregate = try readAggregatePasswordMap(allowUserInteraction: false) ?? [:]
+        if aggregate[remoteID] != password {
+            aggregate[remoteID] = password
+            try upsertAggregatePasswordMap(aggregate, allowUserInteraction: true)
         }
+
+        // Intentionally do not delete legacy per-remote items here.
+        // Deleting or modifying legacy items can trigger repeated Keychain ownership prompts.
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -80,32 +91,15 @@ final class KeychainService: KeychainServiceProtocol {
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This can throw an error: callers should use do/try/catch or propagate the error.
     func readPassword(remoteID: String, allowUserInteraction: Bool) throws -> String? {
-        if let currentPassword = try readPasswordValue(
-            remoteID: remoteID,
-            service: service,
-            allowUserInteraction: allowUserInteraction
-        ) {
-            return currentPassword
+        let allowUserInteraction = allowUserInteraction && allowInteractiveReads
+        if let cached = cachedPassword(for: remoteID) {
+            return cached
         }
-
-        // Product policy: never query legacy keychain service during runtime reads.
-        // Legacy interactive reads are a known source of repeated authorization prompts.
-        if !allowLegacyFallbackForNonInteractiveReads {
-            return nil
-        }
-
-        for legacyService in legacyServices {
-            if let legacyPassword = try readPasswordValue(
-                remoteID: remoteID,
-                service: legacyService,
-                allowUserInteraction: allowUserInteraction
-            ) {
-                if let passwordData = legacyPassword.data(using: .utf8) {
-                    _ = try? upsertPassword(remoteID: remoteID, passwordData: passwordData, service: service)
-                }
-                _ = deletePasswordStatus(remoteID: remoteID, service: legacyService)
-                return legacyPassword
-            }
+        if let aggregate = try readAggregatePasswordMap(allowUserInteraction: allowUserInteraction),
+           let stored = aggregate[remoteID],
+           !stored.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            cachePassword(stored, for: remoteID)
+            return stored
         }
 
         return nil
@@ -114,71 +108,22 @@ final class KeychainService: KeychainServiceProtocol {
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This can throw an error: callers should use do/try/catch or propagate the error.
     func deletePassword(remoteID: String) throws {
-        var firstUnexpectedStatus: OSStatus?
-        for targetService in [service] + legacyServices {
-            let status = deletePasswordStatus(remoteID: remoteID, service: targetService)
-            if status == errSecSuccess || status == errSecItemNotFound {
-                continue
+        clearCachedPassword(for: remoteID)
+
+        aggregateLock.lock()
+        defer { aggregateLock.unlock() }
+        if var aggregate = try readAggregatePasswordMap(allowUserInteraction: false) {
+            aggregate.removeValue(forKey: remoteID)
+            if aggregate.isEmpty {
+                _ = deleteAggregateStatus()
+            } else {
+                try upsertAggregatePasswordMap(aggregate, allowUserInteraction: false)
             }
-            if firstUnexpectedStatus == nil {
-                firstUnexpectedStatus = status
-            }
-        }
-        if let status = firstUnexpectedStatus {
-            throw AppError.keychainError("Failed to delete keychain item (\(status))")
         }
     }
 
-    private func upsertPassword(remoteID: String, passwordData: Data, service: String) throws {
-        let query = itemQuery(remoteID: remoteID, service: service)
-        let attributes: [String: Any] = [
-            kSecValueData as String: passwordData,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-        ]
-
-        let status = SecItemCopyMatching(nonInteractive(query) as CFDictionary, nil)
-        if status == errSecSuccess {
-            let updateStatus = SecItemUpdate(nonInteractive(query) as CFDictionary, attributes as CFDictionary)
-            guard updateStatus == errSecSuccess else {
-                throw AppError.keychainError("Failed to update keychain item (\(updateStatus))")
-            }
-            return
-        }
-        if status == errSecItemNotFound {
-            var insert = query
-            insert.merge(attributes) { current, _ in current }
-            let insertStatus = SecItemAdd(nonInteractive(insert) as CFDictionary, nil)
-            guard insertStatus == errSecSuccess else {
-                throw AppError.keychainError("Failed to add keychain item (\(insertStatus))")
-            }
-            return
-        }
-        if status == errSecInteractionNotAllowed {
-            let insertQuery = nonInteractive([
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: service,
-                kSecAttrAccount as String: remoteID,
-                kSecValueData as String: passwordData,
-                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-            ])
-            let insertStatus = SecItemAdd(insertQuery as CFDictionary, nil)
-            if insertStatus == errSecSuccess {
-                return
-            }
-            if insertStatus == errSecDuplicateItem {
-                throw AppError.keychainError("Failed to update keychain item (\(status))")
-            }
-            throw AppError.keychainError("Failed to add keychain item (\(insertStatus))")
-        }
-        throw AppError.keychainError("Failed to query keychain (\(status))")
-    }
-
-    private func readPasswordValue(
-        remoteID: String,
-        service: String,
-        allowUserInteraction: Bool
-    ) throws -> String? {
-        var query = itemQuery(remoteID: remoteID, service: service)
+    private func readAggregatePasswordMap(allowUserInteraction: Bool) throws -> [String: String]? {
+        var query = aggregateQuery()
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         if !allowUserInteraction {
@@ -187,42 +132,133 @@ final class KeychainService: KeychainServiceProtocol {
 
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-
         if status == errSecItemNotFound {
             return nil
         }
         if status == errSecInteractionNotAllowed && !allowUserInteraction {
             return nil
         }
-
         guard status == errSecSuccess else {
             throw AppError.keychainError("Failed to read keychain item (\(status))")
         }
-
-        guard let data = result as? Data, let password = String(data: data, encoding: .utf8) else {
+        guard let data = result as? Data else {
             throw AppError.keychainError("Invalid password data in keychain")
         }
-
-        return password
+        if data.isEmpty {
+            return [:]
+        }
+        do {
+            return try JSONDecoder().decode([String: String].self, from: data)
+        } catch {
+            throw AppError.keychainError("Failed to decode keychain password map")
+        }
     }
 
-    private func deletePasswordStatus(remoteID: String, service: String) -> OSStatus {
-        SecItemDelete(nonInteractive(itemQuery(remoteID: remoteID, service: service)) as CFDictionary)
+    private func upsertAggregatePasswordMap(_ map: [String: String], allowUserInteraction: Bool = false) throws {
+        let data = try JSONEncoder().encode(map)
+        try upsertAggregateData(data, allowUserInteraction: allowUserInteraction)
     }
 
-    private func itemQuery(remoteID: String, service: String) -> [String: Any] {
+    private func upsertAggregateData(_ data: Data, allowUserInteraction: Bool) throws {
+        let query = aggregateQuery()
+        let lookupQuery = allowUserInteraction ? query : nonInteractive(query)
+        let updateQuery = allowUserInteraction ? query : nonInteractive(query)
+        let updateAttributes: [String: Any] = [
+            kSecValueData as String: data
+        ]
+        let insertAttributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+        ]
+
+        let status = SecItemCopyMatching(lookupQuery as CFDictionary, nil)
+        if status == errSecSuccess {
+            let updateStatus = SecItemUpdate(updateQuery as CFDictionary, updateAttributes as CFDictionary)
+            guard updateStatus == errSecSuccess else {
+                throw AppError.keychainError("Failed to update keychain item (\(updateStatus))")
+            }
+            return
+        }
+        if status == errSecItemNotFound {
+            var insert = query
+            insert.merge(insertAttributes) { current, _ in current }
+            var insertQuery = insert as CFDictionary
+            if !allowUserInteraction {
+                insertQuery = nonInteractive(insert) as CFDictionary
+            }
+
+            let insertStatus = SecItemAdd(insertQuery, nil)
+            guard insertStatus == errSecSuccess else {
+                if insertStatus == errSecDuplicateItem {
+                    let updateStatus = SecItemUpdate(updateQuery as CFDictionary, updateAttributes as CFDictionary)
+                    guard updateStatus == errSecSuccess else {
+                        throw AppError.keychainError("Failed to update keychain item (\(updateStatus))")
+                    }
+                    return
+                }
+                throw AppError.keychainError("Failed to add keychain item (\(insertStatus))")
+            }
+            return
+        }
+        if status == errSecInteractionNotAllowed {
+            let insertQueryDictionary: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: Self.aggregateService,
+                kSecAttrAccount as String: Self.aggregateAccount,
+                kSecValueData as String: data,
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+            ]
+            let insertQuery = allowUserInteraction ? insertQueryDictionary : nonInteractive(insertQueryDictionary)
+            let insertStatus = SecItemAdd(insertQuery as CFDictionary, nil)
+            if insertStatus == errSecSuccess {
+                return
+            }
+            if insertStatus == errSecDuplicateItem {
+                let updateStatus = SecItemUpdate(updateQuery as CFDictionary, updateAttributes as CFDictionary)
+                guard updateStatus == errSecSuccess else {
+                    throw AppError.keychainError("Failed to update keychain item (\(updateStatus))")
+                }
+                return
+            }
+            throw AppError.keychainError("Failed to add keychain item (\(insertStatus))")
+        }
+        throw AppError.keychainError("Failed to query keychain (\(status))")
+    }
+
+    private func deleteAggregateStatus() -> OSStatus {
+        SecItemDelete(nonInteractive(aggregateQuery()) as CFDictionary)
+    }
+
+    private func aggregateQuery() -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: remoteID
+            kSecAttrService as String: Self.aggregateService,
+            kSecAttrAccount as String: Self.aggregateAccount
         ]
     }
 
     private func nonInteractive(_ query: [String: Any]) -> [String: Any] {
         var query = query
-        let context = LAContext()
-        context.interactionNotAllowed = true
-        query[kSecUseAuthenticationContext as String] = context
+        query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
         return query
+    }
+
+
+    private func cachedPassword(for remoteID: String) -> String? {
+        passwordCacheLock.lock()
+        defer { passwordCacheLock.unlock() }
+        return passwordCache[remoteID]
+    }
+
+    private func cachePassword(_ password: String, for remoteID: String) {
+        passwordCacheLock.lock()
+        passwordCache[remoteID] = password
+        passwordCacheLock.unlock()
+    }
+
+    private func clearCachedPassword(for remoteID: String) {
+        passwordCacheLock.lock()
+        passwordCache.removeValue(forKey: remoteID)
+        passwordCacheLock.unlock()
     }
 }

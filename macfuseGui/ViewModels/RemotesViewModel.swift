@@ -221,8 +221,6 @@ final class RemotesViewModel: ObservableObject {
     private var pendingStartupAutoConnectIDs: Set<UUID> = []
     private var startupAutoConnectInProgress = false
     private var startupAutoConnectRerunRequested = false
-    private var startupInteractiveUnlockAttempted = false
-    private var interactiveKeychainReadConsumed = false
     private var networkRestoreDebounceTask: Task<Void, Never>?
     private var recoveryMonitoringStarted = false
     private var shutdownInProgress = false
@@ -869,18 +867,14 @@ final class RemotesViewModel: ObservableObject {
             return
         }
 
-        var hasAttemptedInteractiveUnlock = false
         for remote in passwordRemotes {
-            // Allow one interactive read to unlock keychain, then continue non-interactively.
-            let allowInteraction = !hasAttemptedInteractiveUnlock && !startupInteractiveUnlockAttempted
+            // Respect global policy for background flows: no keychain auth popups unless explicitly enabled.
+            let allowInteraction = allowInteractiveKeychainReads
+
             _ = await resolvedPasswordForRemote(
                 remote.id,
                 allowUserInteraction: allowInteraction
             )
-            if allowInteraction {
-                hasAttemptedInteractiveUnlock = true
-                startupInteractiveUnlockAttempted = true
-            }
         }
     }
 
@@ -923,7 +917,14 @@ final class RemotesViewModel: ObservableObject {
         for remote in remotes {
             let forceStopQueuedAt = Date()
             logMountCall(op: "forceStopProcesses", remoteID: remote.id, operationID: nil, queuedAt: forceStopQueuedAt)
-            await mountManager.forceStopProcesses(for: remote, queuedAt: forceStopQueuedAt, operationID: nil)
+            // Manual force reset should not trigger Files & Folders "network volume" prompts.
+            // Stop scoped sshfs processes only and avoid force-unmount path access.
+            await mountManager.forceStopProcesses(
+                for: remote,
+                queuedAt: forceStopQueuedAt,
+                operationID: nil,
+                skipForceUnmount: true
+            )
             let disconnected = RemoteStatus(
                 state: .disconnected,
                 mountedPath: nil,
@@ -1271,7 +1272,8 @@ final class RemotesViewModel: ObservableObject {
                 await mountManager.forceStopProcesses(
                     for: remote,
                     queuedAt: forceStopQueuedAt,
-                    operationID: operationID
+                    operationID: operationID,
+                    skipForceUnmount: true
                 )
             }
         }
@@ -1379,7 +1381,8 @@ final class RemotesViewModel: ObservableObject {
             await mountManager.forceStopProcesses(
                 for: remote,
                 queuedAt: forceStopQueuedAt,
-                operationID: operationID
+                operationID: operationID,
+                skipForceUnmount: true
             )
             guard isOperationCurrent(remoteID: remoteID, operationID: operationID) else {
                 return
@@ -1727,7 +1730,8 @@ final class RemotesViewModel: ObservableObject {
                         for: remote,
                         queuedAt: forceStopQueuedAt,
                         operationID: nil,
-                        aggressiveUnmount: true
+                        aggressiveUnmount: true,
+                        skipForceUnmount: true
                     )
                     return (remote.id, remote.displayName)
                 }
@@ -2306,7 +2310,12 @@ final class RemotesViewModel: ObservableObject {
 
             let forceStopQueuedAt = Date()
             self.logMountCall(op: "forceStopProcesses", remoteID: remoteID, operationID: nil, queuedAt: forceStopQueuedAt)
-            await self.mountManager.forceStopProcesses(for: remote, queuedAt: forceStopQueuedAt, operationID: nil)
+            await self.mountManager.forceStopProcesses(
+                for: remote,
+                queuedAt: forceStopQueuedAt,
+                operationID: nil,
+                skipForceUnmount: true
+            )
 
             guard self.remoteOperations[remoteID] == nil else {
                 return
@@ -2892,18 +2901,7 @@ final class RemotesViewModel: ObservableObject {
             return cached
         }
 
-        let effectiveAllowUserInteraction: Bool
-        if allowUserInteraction, !interactiveKeychainReadConsumed {
-            interactiveKeychainReadConsumed = true
-            effectiveAllowUserInteraction = true
-            diagnostics.append(
-                level: .debug,
-                category: "startup",
-                message: "Allowing one interactive keychain read for remoteID=\(remoteID.uuidString)."
-            )
-        } else {
-            effectiveAllowUserInteraction = false
-        }
+        let effectiveAllowUserInteraction = allowUserInteraction
 
         do {
             let stored = try await readPasswordFromKeychainOffMain(

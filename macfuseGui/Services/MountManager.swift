@@ -298,22 +298,26 @@ actor MountManager {
 
             if existingMountRecord != nil {
                 diagnostics.append(level: .info, category: "mount", message: "Pre-connect cleanup for \(remote.localMountPoint)")
-                let mountResponsive = await isMountPathResponsive(
-                    remote.localMountPoint,
+                // Do not force-unmount here: touching mounted paths can trigger macOS
+                // Network Volume permission prompts. Kill scoped sshfs pids and wait
+                // for mount-table disappearance instead.
+                await forceStopProcesses(
+                    for: remote,
+                    queuedAt: Date(),
+                    operationID: operationID,
+                    skipForceUnmount: true
+                )
+
+                let stillMounted = try await currentMountRecord(
+                    for: remote.localMountPoint,
                     remoteID: remote.id,
                     operationID: operationID
-                )
-                if !mountResponsive {
-                    diagnostics.append(
-                        level: .warning,
-                        category: "mount",
-                        message: "Pre-connect mount is unresponsive for \(remote.displayName). Using force-stop cleanup."
+                ) != nil
+                if stillMounted {
+                    throw AppError.processFailure(
+                        "Mount is still active at \(remote.localMountPoint). Wait a few seconds and retry Connect."
                     )
                 }
-
-                // Avoid deep unmount/lsof flows in reconnect path. A quick scoped kill+force-unmount
-                // keeps wake/recovery responsive and prevents stale mounts from hanging Finder.
-                await forceStopProcesses(for: remote, queuedAt: Date(), operationID: operationID)
             }
 
             try throwIfCancelled()
@@ -563,10 +567,16 @@ actor MountManager {
         }
 
         if skipForceUnmount {
+            let autoUnmounted = await waitForUnmountAfterProcessStop(
+                remote: remote,
+                operationID: operationID
+            )
             diagnostics.append(
-                level: .info,
+                level: autoUnmounted ? .info : .warning,
                 category: "mount",
-                message: "Skipped force-unmount for \(remote.displayName) (termination cleanup)."
+                message: autoUnmounted
+                    ? "Skipped force-unmount for \(remote.displayName) (requested by caller); mount cleared after process stop."
+                    : "Skipped force-unmount for \(remote.displayName) (requested by caller); mount still present after process stop."
             )
             return
         }
@@ -576,6 +586,32 @@ actor MountManager {
             remoteName: remote.displayName,
             aggressive: aggressiveUnmount
         )
+    }
+
+    /// Beginner note: When force-unmount is intentionally skipped, poll mount-table state
+    /// briefly so reconnect paths can avoid immediate "mount still active" failures.
+    /// This path only inspects mount records and does not probe mounted file contents.
+    private func waitForUnmountAfterProcessStop(
+        remote: RemoteConfig,
+        operationID: UUID?,
+        timeoutSeconds: TimeInterval = 3
+    ) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeoutSeconds)
+        while Date() < deadline {
+            if Task.isCancelled {
+                return false
+            }
+            let mounted = (try? await currentMountRecord(
+                for: remote.localMountPoint,
+                remoteID: remote.id,
+                operationID: operationID
+            )) != nil
+            if !mounted {
+                return true
+            }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+        return false
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.

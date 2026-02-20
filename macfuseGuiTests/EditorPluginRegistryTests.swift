@@ -255,7 +255,7 @@ final class EditorPluginRegistryTests: XCTestCase {
 
         XCTAssertNil(registry.plugin(id: "env-exploit"))
         XCTAssertTrue(registry.loadIssues.contains(where: { issue in
-            issue.file == "env-exploit.json" && issue.reason.contains("is not allowed")
+            issue.file == "env-exploit.json" && issue.reason.contains("shell commands")
         }))
     }
 
