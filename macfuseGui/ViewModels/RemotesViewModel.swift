@@ -917,13 +917,10 @@ final class RemotesViewModel: ObservableObject {
         for remote in remotes {
             let forceStopQueuedAt = Date()
             logMountCall(op: "forceStopProcesses", remoteID: remote.id, operationID: nil, queuedAt: forceStopQueuedAt)
-            // Manual force reset should not trigger Files & Folders "network volume" prompts.
-            // Stop scoped sshfs processes only and avoid force-unmount path access.
             await mountManager.forceStopProcesses(
                 for: remote,
                 queuedAt: forceStopQueuedAt,
-                operationID: nil,
-                skipForceUnmount: true
+                operationID: nil
             )
             let disconnected = RemoteStatus(
                 state: .disconnected,
@@ -1272,8 +1269,7 @@ final class RemotesViewModel: ObservableObject {
                 await mountManager.forceStopProcesses(
                     for: remote,
                     queuedAt: forceStopQueuedAt,
-                    operationID: operationID,
-                    skipForceUnmount: true
+                    operationID: operationID
                 )
             }
         }
@@ -1381,8 +1377,7 @@ final class RemotesViewModel: ObservableObject {
             await mountManager.forceStopProcesses(
                 for: remote,
                 queuedAt: forceStopQueuedAt,
-                operationID: operationID,
-                skipForceUnmount: true
+                operationID: operationID
             )
             guard isOperationCurrent(remoteID: remoteID, operationID: operationID) else {
                 return
@@ -1730,8 +1725,7 @@ final class RemotesViewModel: ObservableObject {
                         for: remote,
                         queuedAt: forceStopQueuedAt,
                         operationID: nil,
-                        aggressiveUnmount: true,
-                        skipForceUnmount: true
+                        aggressiveUnmount: true
                     )
                     return (remote.id, remote.displayName)
                 }
@@ -2313,8 +2307,7 @@ final class RemotesViewModel: ObservableObject {
             await self.mountManager.forceStopProcesses(
                 for: remote,
                 queuedAt: forceStopQueuedAt,
-                operationID: nil,
-                skipForceUnmount: true
+                operationID: nil
             )
 
             guard self.remoteOperations[remoteID] == nil else {

@@ -7,7 +7,6 @@
 // Maintenance tip: Start reading top-to-bottom once, then follow one user action end-to-end through call sites.
 
 import Foundation
-import LocalAuthentication
 import Security
 
 /// Beginner note: This type groups related state and behavior for one part of the app.
@@ -37,29 +36,22 @@ extension KeychainServiceProtocol {
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 final class KeychainService: KeychainServiceProtocol {
-    static let currentService = "com.visualweb.macfusegui.password.v2"
-    static let legacyService = "com.visualweb.macfusegui.password"
     static let aggregateService = "com.visualweb.macfusegui.passwords.v2"
     static let aggregateAccount = "macfuseGui.passwords.v2"
     // Product policy: reads in app flows should stay non-interactive.
     private let allowInteractiveReads = false
 
-    private let service: String
-    private let legacyServices: [String]
+    private let aggregateServiceName: String
+    private let aggregateAccountName: String
     private let passwordCacheLock = NSLock()
     private var passwordCache: [String: String] = [:]
     private let aggregateLock = NSLock()
 
     /// Beginner note: Initializers create valid state before any other method is used.
-    init(service: String = KeychainService.currentService, legacyServices: [String]? = nil) {
-        self.service = service
-        if let legacyServices {
-            self.legacyServices = legacyServices.filter { $0 != service }
-        } else if service == Self.currentService {
-            self.legacyServices = [Self.legacyService]
-        } else {
-            self.legacyServices = []
-        }
+    init(service: String = KeychainService.aggregateService, legacyServices: [String]? = nil) {
+        self.aggregateServiceName = service
+        self.aggregateAccountName = Self.aggregateAccount
+        _ = legacyServices // Legacy keychain entries are intentionally ignored for new installs.
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -77,9 +69,6 @@ final class KeychainService: KeychainServiceProtocol {
             aggregate[remoteID] = password
             try upsertAggregatePasswordMap(aggregate, allowUserInteraction: true)
         }
-
-        // Intentionally do not delete legacy per-remote items here.
-        // Deleting or modifying legacy items can trigger repeated Keychain ownership prompts.
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -203,8 +192,8 @@ final class KeychainService: KeychainServiceProtocol {
         if status == errSecInteractionNotAllowed {
             let insertQueryDictionary: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: Self.aggregateService,
-                kSecAttrAccount as String: Self.aggregateAccount,
+                kSecAttrService as String: aggregateServiceName,
+                kSecAttrAccount as String: aggregateAccountName,
                 kSecValueData as String: data,
                 kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
             ]
@@ -232,8 +221,8 @@ final class KeychainService: KeychainServiceProtocol {
     private func aggregateQuery() -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.aggregateService,
-            kSecAttrAccount as String: Self.aggregateAccount
+            kSecAttrService as String: aggregateServiceName,
+            kSecAttrAccount as String: aggregateAccountName
         ]
     }
 
@@ -242,7 +231,6 @@ final class KeychainService: KeychainServiceProtocol {
         query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
         return query
     }
-
 
     private func cachedPassword(for remoteID: String) -> String? {
         passwordCacheLock.lock()

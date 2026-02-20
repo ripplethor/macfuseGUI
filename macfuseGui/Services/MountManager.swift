@@ -298,14 +298,12 @@ actor MountManager {
 
             if existingMountRecord != nil {
                 diagnostics.append(level: .info, category: "mount", message: "Pre-connect cleanup for \(remote.localMountPoint)")
-                // Do not force-unmount here: touching mounted paths can trigger macOS
-                // Network Volume permission prompts. Kill scoped sshfs pids and wait
-                // for mount-table disappearance instead.
+                // Force-stop scoped sshfs pids and force-unmount so a fresh connect
+                // can proceed deterministically on the next attempt.
                 await forceStopProcesses(
                     for: remote,
                     queuedAt: Date(),
-                    operationID: operationID,
-                    skipForceUnmount: true
+                    operationID: operationID
                 )
 
                 let stillMounted = try await currentMountRecord(
@@ -485,6 +483,7 @@ actor MountManager {
         logActorQueueDelay(op: "forceStopProcesses", remote: remote, queuedAt: queuedAt, operationID: operationID)
         let normalizedMountPoint = URL(fileURLWithPath: remote.localMountPoint).standardizedFileURL.path
         let connectionNeedle = "\(remote.username)@\(remote.host):\(remote.remoteDirectory)"
+        let postStopAction = skipForceUnmount ? "skipping force-unmount by request." : "attempting force-unmount anyway."
 
         do {
             let result = try await runner.run(
@@ -548,14 +547,14 @@ actor MountManager {
                     diagnostics.append(
                         level: .debug,
                         category: "mount",
-                        message: "No sshfs pid match found for \(remote.displayName); attempting force-unmount anyway."
+                        message: "No sshfs pid match found for \(remote.displayName); \(postStopAction)"
                     )
                 }
             } else {
                 diagnostics.append(
                     level: .warning,
                     category: "mount",
-                    message: "Process listing failed while force-stopping \(remote.displayName) (exit \(result.exitCode)); attempting force-unmount anyway."
+                    message: "Process listing failed while force-stopping \(remote.displayName) (exit \(result.exitCode)); \(postStopAction)"
                 )
             }
         } catch {
