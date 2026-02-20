@@ -35,7 +35,7 @@ DMG_APPLICATIONS_LINK_NAME="Applications"
 DMG_INSTALLER_SCRIPT_NAME="Install macFUSEGui.command"
 DMG_TERMINAL_HELP_NAME="INSTALL_IN_TERMINAL.txt"
 DMG_ZLIB_LEVEL="${DMG_ZLIB_LEVEL:-9}"
-STRIP_DMG_PAYLOAD="${STRIP_DMG_PAYLOAD:-1}"
+STRIP_DMG_PAYLOAD="${STRIP_DMG_PAYLOAD:-0}"
 UPDATE_HOMEBREW_CASK="${UPDATE_HOMEBREW_CASK:-1}"
 
 CONFIGURATION="${CONFIGURATION:-Release}"
@@ -312,7 +312,11 @@ strip_staged_app_if_enabled() {
   # the Mach-O payload. DMG staging re-signs the bundle immediately afterwards.
   codesign --remove-signature "$staged_app_path" >/dev/null 2>&1 || true
   codesign --remove-signature "$executable_path" >/dev/null 2>&1 || true
-  strip -Sx "$executable_path"
+  local strip_output=""
+  if ! strip_output="$(strip -Sx "$executable_path" 2>&1)"; then
+    echo "Warning: failed to strip staged app payload; continuing without extra strip."
+    echo "$strip_output"
+  fi
 }
 
 verify_dmg_with_fallback() {

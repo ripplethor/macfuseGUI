@@ -121,7 +121,11 @@ strip_app_executable_if_enabled() {
     exit 1
   }
 
-  strip -Sx "$executable_path"
+  local strip_output=""
+  if ! strip_output="$(strip -Sx "$executable_path" 2>&1)"; then
+    echo "Warning: strip failed for $app_bundle; continuing with unstripped binary."
+    echo "$strip_output"
+  fi
 }
 
 ad_hoc_sign_app_if_needed() {
