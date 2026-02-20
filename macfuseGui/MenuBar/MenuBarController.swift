@@ -645,8 +645,13 @@ private struct MenuPopoverContentView: View {
 
     private var header: some View {
         HStack {
-            Text("macfuseGui")
-                .font(.headline)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("macfuseGui")
+                    .font(.headline)
+                Text(appVersionText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
             Spacer()
             Text(summaryText)
                 .font(.caption)
@@ -724,6 +729,12 @@ private struct MenuPopoverContentView: View {
 
     private var activeEditorPlugins: [EditorPluginDefinition] {
         editorPluginRegistry.activePluginsInPriorityOrder()
+    }
+
+    private var appVersionText: String {
+        let version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "?"
+        let build = (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "?"
+        return "v\(version) (\(build))"
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
