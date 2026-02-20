@@ -2,7 +2,7 @@ cask "macfusegui" do
   arch arm: "arm64", intel: "x86_64"
 
   version "0.1.7"
-  sha256 arm: "fba519f9ab20084e86bd79c9f383e5bfbb601687f94544165d5298fb7200e3a5", intel: "aee9c744a75cf5260d95a626d1654466ecb92f1af14cccef490041c1953c24ee"
+  sha256 arm: "f25d6c25386d088261b0300bc1c4087b2849662c0aab16b1d11f117d362cdc0c", intel: "a0b56a6818519f26fc52d396b5935a45fa32b6d7983d5b1e58612114f3a7f2a4"
 
   url "https://github.com/ripplethor/macfuseGUI/releases/download/v#{version}/macfuseGui-v#{version}-macos-#{arch}.dmg",
       verified: "github.com/ripplethor/macfuseGUI/"
