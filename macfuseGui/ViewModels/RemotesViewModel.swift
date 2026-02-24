@@ -2458,14 +2458,16 @@ final class RemotesViewModel: ObservableObject {
     ) -> String? {
         switch intent {
         case .connect:
-            return currentState == .connecting ? "Connect timed out. Check network/credentials and retry." : nil
+            return currentState == .connecting
+                ? "Connect timed out. Check network/credentials and retry. If the remote server was restarted, disconnect and reconnect to clear stale mount state."
+                : nil
         case .disconnect:
             guard currentState == .disconnecting else {
                 return nil
             }
             return "Disconnect timed out after \(Int(disconnectWatchdogTimeout))s. Close files using the mount, then retry."
         case .refresh:
-            return "Status refresh timed out. Try Refresh again."
+            return "Status refresh timed out. The mount may be stale (common after server restart). Disconnect and reconnect this remote."
         case .testConnection:
             return "Test connection timed out. Check network/credentials and retry."
         }

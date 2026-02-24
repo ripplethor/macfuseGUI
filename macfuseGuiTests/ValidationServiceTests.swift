@@ -229,7 +229,7 @@ final class ValidationServiceTests: XCTestCase {
                 currentState: .connecting,
                 disconnectWatchdogTimeout: 10
             ),
-            "Connect timed out. Check network/credentials and retry."
+            "Connect timed out. Check network/credentials and retry. If the remote server was restarted, disconnect and reconnect to clear stale mount state."
         )
         XCTAssertNil(
             RemotesViewModel.watchdogTimeoutMessage(
@@ -252,7 +252,7 @@ final class ValidationServiceTests: XCTestCase {
                 currentState: .connected,
                 disconnectWatchdogTimeout: 10
             ),
-            "Status refresh timed out. Try Refresh again."
+            "Status refresh timed out. The mount may be stale (common after server restart). Disconnect and reconnect this remote."
         )
     }
 }

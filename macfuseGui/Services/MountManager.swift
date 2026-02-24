@@ -720,7 +720,13 @@ actor MountManager {
             )
             diagnostics.append(level: .info, category: "mount", message: "Created missing local mount point: \(normalized)")
         } catch {
-            throw AppError.validationFailed(["Local mount point does not exist and could not be created: \(normalized). \(error.localizedDescription)"])
+            throw AppError.validationFailed([
+                "Local mount point could not be created: \(normalized). " +
+                "This can happen after a server restart leaves a stale mount path, or when macOS blocks writes to that folder. " +
+                "Disconnect the remote, wait a few seconds, then reconnect. " +
+                "If it keeps failing, choose a different local mount folder. " +
+                "Details: \(error.localizedDescription)"
+            ])
         }
     }
 
