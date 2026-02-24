@@ -30,6 +30,27 @@ final class ProcessRunnerTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("line-"), "Expected partial stdout to be captured before timeout.")
     }
 
+    /// Detached descendants can keep stdio pipes open after the timed-out parent exits.
+    /// Runner timeout teardown must remain bounded even when EOF is delayed by descendants.
+    func testTimedOutProcessWithDetachedChildPipeDoesNotHang() async throws {
+        let runner = ProcessRunner()
+        let result = try await runner.run(
+            executable: "/bin/sh",
+            arguments: [
+                "-c",
+                "/usr/bin/python3 -c 'import os,time; os.setsid(); time.sleep(20)' & echo child:$!; sleep 20"
+            ],
+            timeout: 1.0
+        )
+
+        if let childPID = childPIDFromOutput(result.stdout), childPID > 1 {
+            _ = Darwin.kill(childPID, SIGKILL)
+        }
+
+        XCTAssertTrue(result.timedOut)
+        XCTAssertTrue(result.duration < 6.5, "Timed-out process should not wait on detached descendants holding stdio.")
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This is async and throwing: callers must await it and handle failures.
     func testCapturesStdoutAndStderrWithoutTimeout() async throws {
@@ -73,6 +94,20 @@ final class ProcessRunnerTests: XCTestCase {
 
         XCTAssertLessThan(elapsed, 4.0, "Cancelled process should terminate promptly.")
         XCTAssertTrue(result.timedOut || result.exitCode != 0, "Cancelled process should not report a clean successful exit.")
+    }
+
+    private func childPIDFromOutput(_ output: String) -> Int32? {
+        for line in output.split(whereSeparator: \.isNewline) {
+            let text = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard text.hasPrefix("child:") else {
+                continue
+            }
+            let pidText = String(text.dropFirst("child:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            if let pid = Int32(pidText), pid > 0 {
+                return pid
+            }
+        }
+        return nil
     }
 }
 

@@ -119,6 +119,19 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                             }
                         }
 
+                        /// Beginner note: This method appends tail output after handlers are stopped.
+                        /// It intentionally bypasses `captureActive` so timeout teardown can still keep late bytes.
+                        func appendTailOutput(_ chunk: Data, toStdout: Bool) {
+                            guard !chunk.isEmpty else { return }
+                            captureLock.lock()
+                            defer { captureLock.unlock() }
+                            if toStdout {
+                                stdoutData.append(chunk)
+                            } else {
+                                stderrData.append(chunk)
+                            }
+                        }
+
                         /// Beginner note: This method is one step in the feature workflow for this file.
                         func stopCaptureHandlers() {
                             captureLock.lock()
@@ -134,7 +147,7 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                         }
 
                         /// Beginner note: This method is one step in the feature workflow for this file.
-                        func drainRemainingOutputOnce() {
+                        func drainRemainingOutputOnceNonBlocking() {
                             captureLock.lock()
                             if drained {
                                 captureLock.unlock()
@@ -143,13 +156,43 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                             drained = true
                             captureLock.unlock()
 
-                            let stdoutTail = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                            let stderrTail = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                            // Use non-blocking reads: timed-out commands can leave descendants holding
+                            // stdout/stderr open, and readDataToEndOfFile may otherwise block indefinitely.
+                            func drainPipe(_ handle: FileHandle, toStdout: Bool) {
+                                let fd = handle.fileDescriptor
+                                let originalFlags = fcntl(fd, F_GETFL)
+                                guard originalFlags >= 0 else {
+                                    return
+                                }
+                                _ = fcntl(fd, F_SETFL, originalFlags | O_NONBLOCK)
+                                defer {
+                                    _ = fcntl(fd, F_SETFL, originalFlags)
+                                }
 
-                            captureLock.lock()
-                            stdoutData.append(stdoutTail)
-                            stderrData.append(stderrTail)
-                            captureLock.unlock()
+                                var buffer = [UInt8](repeating: 0, count: 16_384)
+                                while true {
+                                    errno = 0
+                                    let bytesRead = Darwin.read(fd, &buffer, buffer.count)
+                                    if bytesRead > 0 {
+                                        let chunk = Data(buffer[0..<Int(bytesRead)])
+                                        appendTailOutput(chunk, toStdout: toStdout)
+                                        continue
+                                    }
+                                    if bytesRead == 0 {
+                                        return
+                                    }
+                                    if errno == EINTR {
+                                        continue
+                                    }
+                                    if errno == EAGAIN || errno == EWOULDBLOCK {
+                                        return
+                                    }
+                                    return
+                                }
+                            }
+
+                            drainPipe(stdoutPipe.fileHandleForReading, toStdout: true)
+                            drainPipe(stderrPipe.fileHandleForReading, toStdout: false)
                         }
 
                         stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
@@ -211,7 +254,7 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                         stopCaptureHandlers()
 
                         if !process.isRunning {
-                            drainRemainingOutputOnce()
+                            drainRemainingOutputOnceNonBlocking()
                         }
 
                         captureLock.lock()
