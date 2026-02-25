@@ -68,20 +68,13 @@ final class ValidationService {
             errors.append("Local mount point contains invalid control characters.")
         } else {
             let normalizedMount = URL(fileURLWithPath: localMount).standardizedFileURL.path
-            var isDir: ObjCBool = false
-            if fileManager.fileExists(atPath: normalizedMount, isDirectory: &isDir) {
-                if !isDir.boolValue {
-                    errors.append("Local mount point must be a directory.")
-                }
-            } else {
-                let parentPath = URL(fileURLWithPath: normalizedMount).deletingLastPathComponent().path
-                var parentIsDir: ObjCBool = false
-                if !fileManager.fileExists(atPath: parentPath, isDirectory: &parentIsDir) || !parentIsDir.boolValue {
-                    errors.append("Parent folder for local mount point must exist.")
-                } else if !fileManager.isWritableFile(atPath: parentPath) {
-                    errors.append("Parent folder for local mount point is not writable.")
-                }
+            if normalizedMount == "/" {
+                errors.append("Local mount point cannot be '/'. Choose a subfolder.")
             }
+            // Important: avoid synchronous file-system probes here.
+            // Save/Test validation runs on MainActor, and stale FUSE mount paths can
+            // block `fileExists`/`isWritableFile` long enough to beachball the UI.
+            // MountManager performs bounded mount-point checks during connect.
         }
 
         switch draft.authMode {

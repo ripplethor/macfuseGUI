@@ -460,11 +460,6 @@ final class MenuBarController: NSObject {
                 targetPath = remote.localMountPoint
             }
 
-            guard self.directoryExists(targetPath) else {
-                self.viewModel.alertMessage = "Mounted path not found: \(targetPath)"
-                return
-            }
-
             let folderURL = URL(fileURLWithPath: targetPath, isDirectory: true)
             let result = await self.editorOpenService.open(
                 folderURL: folderURL,
@@ -558,12 +553,6 @@ final class MenuBarController: NSObject {
             return normalized
         }
         return String(normalized.prefix(limit)) + "…"
-    }
-
-    /// Beginner note: This method is one step in the feature workflow for this file.
-    private func directoryExists(_ path: String) -> Bool {
-        var isDirectory = ObjCBool(false)
-        return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
