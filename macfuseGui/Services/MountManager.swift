@@ -73,6 +73,10 @@ actor MountManager {
         queuedAt: Date = Date(),
         operationID: UUID? = nil
     ) async -> RemoteStatus {
+        func cancelledStatus() -> RemoteStatus? {
+            Task.isCancelled ? cachedStatus(for: remote.id) : nil
+        }
+
         if Task.isCancelled {
             return cachedStatus(for: remote.id)
         }
@@ -88,6 +92,9 @@ actor MountManager {
                 remoteID: remote.id,
                 operationID: operationID
             )
+            if let cancelled = cancelledStatus() {
+                return cancelled
+            }
 
             // Guard against single-pass probe misses: if we were connected, do a fast
             // confirmation pass before transitioning to disconnected/recovery states.
@@ -98,7 +105,13 @@ actor MountManager {
                     operationID: operationID
                 ) {
                     mountedRecord = dfRecord
+                    if let cancelled = cancelledStatus() {
+                        return cancelled
+                    }
                 } else if await isMountPathResponsive(remote.localMountPoint, remoteID: remote.id, operationID: operationID) {
+                    if let cancelled = cancelledStatus() {
+                        return cancelled
+                    }
                     let preserveMissCount = (connectedPreserveMisses[remote.id] ?? 0) + 1
                     connectedPreserveMisses[remote.id] = preserveMissCount
 
@@ -133,6 +146,9 @@ actor MountManager {
                     updateCachedStatus(staleStatus, for: remote.id)
                     return staleStatus
                 } else {
+                    if let cancelled = cancelledStatus() {
+                        return cancelled
+                    }
                     connectedPreserveMisses[remote.id] = 0
                     try? await Task.sleep(nanoseconds: 250_000_000)
                     mountedRecord = try await currentMountRecord(
@@ -140,6 +156,9 @@ actor MountManager {
                         remoteID: remote.id,
                         operationID: operationID
                     )
+                    if let cancelled = cancelledStatus() {
+                        return cancelled
+                    }
                 }
             }
 
@@ -152,6 +171,9 @@ actor MountManager {
                     remoteID: remote.id,
                     operationID: operationID
                 )
+                if let cancelled = cancelledStatus() {
+                    return cancelled
+                }
                 let directoryHealthy = metadataHealthy
                     ? await isMountDirectoryQueryable(
                         remote.localMountPoint,
@@ -159,6 +181,9 @@ actor MountManager {
                         operationID: operationID
                     )
                     : false
+                if let cancelled = cancelledStatus() {
+                    return cancelled
+                }
 
                 if !metadataHealthy || !directoryHealthy {
                     // Important: refreshStatus should stay lightweight.
@@ -202,9 +227,15 @@ actor MountManager {
 
                 let previous = cachedStatus(for: remote.id)
                 if previous.state == .connected {
+                    if let cancelled = cancelledStatus() {
+                        return cancelled
+                    }
                     // Only preserve connected when the mounted path is still immediately
                     // responsive. If it is not responsive, force recovery to reconnect.
                     if await isMountPathResponsive(remote.localMountPoint, remoteID: remote.id, operationID: operationID) {
+                        if let cancelled = cancelledStatus() {
+                            return cancelled
+                        }
                         let preserveMissCount = (connectedPreserveMisses[remote.id] ?? 0) + 1
                         connectedPreserveMisses[remote.id] = preserveMissCount
                         if preserveMissCount <= maxConnectedPreserveMisses {

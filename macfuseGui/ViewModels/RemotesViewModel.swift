@@ -1260,7 +1260,7 @@ final class RemotesViewModel: ObservableObject {
         }
 
         let stillCurrent = isOperationCurrent(remoteID: remoteID, operationID: operationID)
-        if connectTimedOut || Task.isCancelled || !stillCurrent {
+        if connectTimedOut, stillCurrent {
             if let active = remoteOperations[remoteID], active.operationID != operationID {
                 // Superseded by a newer operation; do not tear down its in-flight work.
             } else {
@@ -1274,7 +1274,7 @@ final class RemotesViewModel: ObservableObject {
             }
         }
 
-        guard isOperationCurrent(remoteID: remoteID, operationID: operationID) else {
+        guard !Task.isCancelled, isOperationCurrent(remoteID: remoteID, operationID: operationID) else {
             return
         }
 
