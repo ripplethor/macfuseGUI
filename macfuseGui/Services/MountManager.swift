@@ -26,7 +26,6 @@ actor MountManager {
     private let mountStateParser: MountStateParser
     private let diagnostics: DiagnosticsService
     private let commandBuilder: MountCommandBuilder
-    private let mountInspectionAttempts = 1
     // Keep mount inspection probes short. These are "status checks", not full recovery work.
     private let mountInspectionCommandTimeout: TimeInterval = 1.5
     private let mountInspectionFallbackTimeout: TimeInterval = 1.5
@@ -396,7 +395,9 @@ actor MountManager {
             updateCachedStatus(status, for: remote.id)
             return status
         } catch {
-            try? await enforceMinimumTransitionVisibility(since: connectBeganAt, minimumSeconds: 0.8)
+            if !Task.isCancelled {
+                try? await enforceMinimumTransitionVisibility(since: connectBeganAt, minimumSeconds: 0.8)
+            }
             let status = RemoteStatus(
                 state: .error,
                 mountedPath: nil,
@@ -542,7 +543,7 @@ actor MountManager {
         for remote: RemoteConfig,
         queuedAt: Date = Date(),
         operationID: UUID? = nil,
-        aggressiveUnmount: Bool = false,
+        fastForceUnmount: Bool = false,
         skipForceUnmount: Bool = false
     ) async {
         logActorQueueDelay(op: "forceStopProcesses", remote: remote, queuedAt: queuedAt, operationID: operationID)
@@ -648,7 +649,7 @@ actor MountManager {
         await forceUnmountMountPoint(
             remote.localMountPoint,
             remoteName: remote.displayName,
-            aggressive: aggressiveUnmount
+            fast: fastForceUnmount
         )
     }
 
@@ -683,6 +684,7 @@ actor MountManager {
     private func waitForUnmount(mountPoint: String, timeoutSeconds: TimeInterval) async throws {
         let deadline = Date().addingTimeInterval(timeoutSeconds)
         while Date() < deadline {
+            try throwIfCancelled()
             if try await currentMountRecord(for: mountPoint) == nil {
                 return
             }
@@ -735,8 +737,6 @@ actor MountManager {
                     || message.contains("connection reset")
                     || message.contains("connection closed")
                     || message.contains("broken pipe")
-                    || message.contains("network is unreachable")
-                    || message.contains("no route to host")
                     || message.contains("temporary failure")
 
                 if shouldRetry && attempt < 2 {
@@ -760,20 +760,20 @@ actor MountManager {
     /// Retry once after bounded cleanup when the message looks like a stale filesystem condition.
     private func shouldRetryConnectAfterMountPointPreparationFailure(_ error: Error) -> Bool {
         let message = error.localizedDescription.lowercased()
+        let normalizedMessage = message.replacingOccurrences(of: "’", with: "'")
         let mountPointCreationFailure = message.contains("local mount point could not be created")
             || message.contains("local mount point does not exist and could not be created")
         guard mountPointCreationFailure else {
             return false
         }
 
-        return message.contains("input/output")
-            || message.contains("device not configured")
-            || message.contains("resource busy")
-            || message.contains("operation timed out")
-            || message.contains("could not be saved")
-            || message.contains("couldn't be saved")
-            || message.contains("couldn’t be saved")
-            || message.contains("stale mount")
+        return normalizedMessage.contains("input/output")
+            || normalizedMessage.contains("device not configured")
+            || normalizedMessage.contains("resource busy")
+            || normalizedMessage.contains("operation timed out")
+            || normalizedMessage.contains("could not be saved")
+            || normalizedMessage.contains("couldn't be saved")
+            || normalizedMessage.contains("stale mount")
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -808,6 +808,7 @@ actor MountManager {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
+    @discardableResult
     private func connectAttempt(
         remote: RemoteConfig,
         password: String?,
@@ -816,103 +817,103 @@ actor MountManager {
         operationID: UUID?
     ) async throws -> RemoteStatus {
         try throwIfCancelled()
-        var askpassCleanup: (() -> Void)?
-        var passwordEnvironment: [String: String] = [:]
+        func runConnectAttempt(passwordEnvironment: [String: String]) async throws -> RemoteStatus {
+            let command = commandBuilder.build(
+                sshfsPath: sshfsPath,
+                remote: remote,
+                passwordEnvironment: passwordEnvironment
+            )
+
+            diagnostics.append(level: .info, category: "mount", message: "Running \(command.redactedCommand)")
+            let commandStartedAt = Date()
+            diagnostics.append(
+                level: .debug,
+                category: "mount",
+                message: "probe start op=sshfs-connect remoteID=\(remote.id.uuidString) operationID=\(operationID?.uuidString ?? "-") mountPoint=\(remote.localMountPoint)"
+            )
+
+            let result = try await runner.run(
+                executable: command.executable,
+                arguments: command.arguments,
+                environment: command.environment,
+                timeout: sshfsConnectCommandTimeout
+            )
+            let commandElapsedMs = Int(Date().timeIntervalSince(commandStartedAt) * 1_000)
+            diagnostics.append(
+                level: .debug,
+                category: "mount",
+                message: "probe end op=sshfs-connect remoteID=\(remote.id.uuidString) operationID=\(operationID?.uuidString ?? "-") mountPoint=\(remote.localMountPoint) elapsedMs=\(commandElapsedMs) timedOut=\(result.timedOut) exit=\(result.exitCode)"
+            )
+
+            try throwIfCancelled()
+
+            if result.timedOut {
+                throw AppError.timeout("sshfs connect timed out.")
+            }
+
+            if result.exitCode != 0 {
+                let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                let stdout = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+                let rawMessage = stderr.isEmpty ? stdout : stderr
+                let message = friendlyMountError(rawMessage, remote: remote)
+                throw AppError.processFailure(message.isEmpty ? "sshfs failed with exit code \(result.exitCode)" : message)
+            }
+
+            // After sshfs exits successfully, the mount should show up quickly.
+            // Keeping this short prevents "phantom hangs" when the system is unstable.
+            let detectionDeadline = Date().addingTimeInterval(5)
+            while Date() < detectionDeadline {
+                if Task.isCancelled {
+                    throw AppError.timeout("Mount operation was cancelled.")
+                }
+
+                do {
+                    if let record = try await currentMountRecord(
+                        for: remote.localMountPoint,
+                        remoteID: remote.id,
+                        operationID: operationID
+                    ) {
+                        let status = RemoteStatus(
+                            state: .connected,
+                            mountedPath: record.mountPoint,
+                            lastError: nil,
+                            updatedAt: Date()
+                        )
+                        if updateStoredStatus {
+                            // Skip status cache updates in "test connection" mode.
+                            updateCachedStatus(status, for: remote.id)
+                        }
+                        return status
+                    }
+                } catch {
+                    if Task.isCancelled {
+                        throw AppError.timeout("Mount operation was cancelled.")
+                    }
+                    // Mount-table probes can be flaky immediately after wake.
+                    // Keep trying until detection deadline instead of failing connect immediately.
+                    diagnostics.append(
+                        level: .debug,
+                        category: "mount",
+                        message: "Post-connect mount detection retry for \(remote.displayName): \(error.localizedDescription)"
+                    )
+                }
+                try await Task.sleep(nanoseconds: 250_000_000)
+            }
+
+            throw AppError.processFailure("sshfs reported success, but mount was not detected.")
+        }
 
         if remote.authMode == .password {
             guard let password, !password.isEmpty else {
                 throw AppError.validationFailed(["Password is required for password authentication."])
             }
-            let askpass = try askpassHelper.makeContext(password: password)
-            passwordEnvironment = askpass.environment
-            askpassCleanup = askpass.cleanup
-        }
 
-        // Always clean temporary askpass helper files/env no matter how this method exits.
-        defer {
-            askpassCleanup?()
-        }
-
-        let command = commandBuilder.build(
-            sshfsPath: sshfsPath,
-            remote: remote,
-            passwordEnvironment: passwordEnvironment
-        )
-
-        diagnostics.append(level: .info, category: "mount", message: "Running \(command.redactedCommand)")
-        let commandStartedAt = Date()
-        diagnostics.append(
-            level: .debug,
-            category: "mount",
-            message: "probe start op=sshfs-connect remoteID=\(remote.id.uuidString) operationID=\(operationID?.uuidString ?? "-") mountPoint=\(remote.localMountPoint)"
-        )
-
-        let result = try await runner.run(
-            executable: command.executable,
-            arguments: command.arguments,
-            environment: command.environment,
-            timeout: sshfsConnectCommandTimeout
-        )
-        let commandElapsedMs = Int(Date().timeIntervalSince(commandStartedAt) * 1_000)
-        diagnostics.append(
-            level: .debug,
-            category: "mount",
-            message: "probe end op=sshfs-connect remoteID=\(remote.id.uuidString) operationID=\(operationID?.uuidString ?? "-") mountPoint=\(remote.localMountPoint) elapsedMs=\(commandElapsedMs) timedOut=\(result.timedOut) exit=\(result.exitCode)"
-        )
-
-        try throwIfCancelled()
-
-        if result.timedOut {
-            throw AppError.timeout("sshfs connect timed out.")
-        }
-
-        if result.exitCode != 0 {
-            let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-            let stdout = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-            let rawMessage = stderr.isEmpty ? stdout : stderr
-            let message = friendlyMountError(rawMessage, remote: remote)
-            throw AppError.processFailure(message.isEmpty ? "sshfs failed with exit code \(result.exitCode)" : message)
-        }
-
-        // After sshfs exits successfully, the mount should show up quickly.
-        // Keeping this short prevents "phantom hangs" when the system is unstable.
-        let detectionDeadline = Date().addingTimeInterval(5)
-        while Date() < detectionDeadline {
-            if Task.isCancelled {
-                throw AppError.timeout("Mount operation was cancelled.")
+            return try await askpassHelper.withContext(password: password) { context in
+                try await runConnectAttempt(passwordEnvironment: context.environment)
             }
-
-            do {
-                if let record = try await currentMountRecord(
-                    for: remote.localMountPoint,
-                    remoteID: remote.id,
-                    operationID: operationID
-                ) {
-                    let status = RemoteStatus(
-                        state: .connected,
-                        mountedPath: record.mountPoint,
-                        lastError: nil,
-                        updatedAt: Date()
-                    )
-                    if updateStoredStatus {
-                        // Skip status cache updates in "test connection" mode.
-                        updateCachedStatus(status, for: remote.id)
-                    }
-                    return status
-                }
-            } catch {
-                // Mount-table probes can be flaky immediately after wake.
-                // Keep trying until detection deadline instead of failing connect immediately.
-                diagnostics.append(
-                    level: .debug,
-                    category: "mount",
-                    message: "Post-connect mount detection retry for \(remote.displayName): \(error.localizedDescription)"
-                )
-            }
-            try await Task.sleep(nanoseconds: 250_000_000)
         }
 
-        throw AppError.processFailure("sshfs reported success, but mount was not detected.")
+        return try await runConnectAttempt(passwordEnvironment: [:])
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -1013,45 +1014,37 @@ actor MountManager {
         let normalizedMountPoint = URL(fileURLWithPath: mountPoint).standardizedFileURL.path
         let remoteText = remoteID?.uuidString ?? "-"
         let operationText = operationID?.uuidString ?? "-"
-        var lastFailure = "unknown failure"
+        try throwIfCancelled()
+        let attemptStartedAt = Date()
+        diagnostics.append(
+            level: .debug,
+            category: "mount",
+            message: "probe start op=mount-inspect remoteID=\(remoteText) operationID=\(operationText) path=\(normalizedMountPoint) attempt=1"
+        )
+        let mountResult = try await runner.run(
+            executable: "/sbin/mount",
+            arguments: [],
+            timeout: mountInspectionCommandTimeout
+        )
+        try throwIfCancelled()
+        let elapsedMs = Int(Date().timeIntervalSince(attemptStartedAt) * 1_000)
+        diagnostics.append(
+            level: .debug,
+            category: "mount",
+            message: "probe end op=mount-inspect remoteID=\(remoteText) operationID=\(operationText) path=\(normalizedMountPoint) attempt=1 elapsedMs=\(elapsedMs) timedOut=\(mountResult.timedOut) exit=\(mountResult.exitCode)"
+        )
 
-        for attempt in 1...mountInspectionAttempts {
-            try throwIfCancelled()
-            let attemptStartedAt = Date()
-            diagnostics.append(
-                level: .debug,
-                category: "mount",
-                message: "probe start op=mount-inspect remoteID=\(remoteText) operationID=\(operationText) path=\(normalizedMountPoint) attempt=\(attempt)"
-            )
-            let mountResult = try await runner.run(
-                executable: "/sbin/mount",
-                arguments: [],
-                timeout: mountInspectionCommandTimeout
-            )
-            try throwIfCancelled()
-            let elapsedMs = Int(Date().timeIntervalSince(attemptStartedAt) * 1_000)
-            diagnostics.append(
-                level: .debug,
-                category: "mount",
-                message: "probe end op=mount-inspect remoteID=\(remoteText) operationID=\(operationText) path=\(normalizedMountPoint) attempt=\(attempt) elapsedMs=\(elapsedMs) timedOut=\(mountResult.timedOut) exit=\(mountResult.exitCode)"
-            )
-
-            if !mountResult.timedOut && mountResult.exitCode == 0 {
-                let records = mountStateParser.parseMountOutput(mountResult.stdout)
-                return mountStateParser.record(forMountPoint: normalizedMountPoint, from: records)
-            }
-
-            lastFailure = mountInspectionFailureDetail(from: mountResult)
-            diagnostics.append(
-                level: .warning,
-                category: "mount",
-                message: "Mount inspection attempt \(attempt) failed for remoteID=\(remoteText) operationID=\(operationText) path=\(normalizedMountPoint): \(lastFailure)"
-            )
-
-            if attempt < mountInspectionAttempts {
-                try? await Task.sleep(nanoseconds: 200_000_000)
-            }
+        if !mountResult.timedOut && mountResult.exitCode == 0 {
+            let records = mountStateParser.parseMountOutput(mountResult.stdout)
+            return mountStateParser.record(forMountPoint: normalizedMountPoint, from: records)
         }
+
+        let lastFailure = mountInspectionFailureDetail(from: mountResult)
+        diagnostics.append(
+            level: .warning,
+            category: "mount",
+            message: "Mount inspection attempt 1 failed for remoteID=\(remoteText) operationID=\(operationText) path=\(normalizedMountPoint): \(lastFailure)"
+        )
 
         if let fallback = try await currentMountRecordViaDF(
             for: normalizedMountPoint,
@@ -1166,7 +1159,7 @@ actor MountManager {
     }
 
     private func cachedStatus(for remoteID: UUID) -> RemoteStatus {
-        return statuses[remoteID] ?? .disconnected
+        return statuses[remoteID] ?? .initial
     }
 
     private func updateCachedStatus(_ status: RemoteStatus, for remoteID: UUID) {
@@ -1203,10 +1196,11 @@ actor MountManager {
 
     /// Beginner note: This is a bounded, non-recursive emergency cleanup path.
     /// It avoids heavy probe loops and makes stale mount teardown deterministic.
-    private func forceUnmountMountPoint(_ mountPoint: String, remoteName: String, aggressive: Bool = false) async {
+    /// When `fast` is true, per-command timeouts are shorter to reduce recovery stall time.
+    private func forceUnmountMountPoint(_ mountPoint: String, remoteName: String, fast: Bool = false) async {
         let normalized = URL(fileURLWithPath: mountPoint).standardizedFileURL.path
         let commands: [(label: String, executable: String, args: [String], timeout: TimeInterval)]
-        if aggressive {
+        if fast {
             commands = [
                 ("diskutil unmount force", "/usr/sbin/diskutil", ["unmount", "force", normalized], 4),
                 ("umount -f", "/sbin/umount", ["-f", normalized], 2)

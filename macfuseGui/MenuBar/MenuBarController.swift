@@ -32,6 +32,7 @@ final class MenuBarController: NSObject {
     private let editorOpenService: EditorOpenService
     private let statusItem: NSStatusItem
     private let popover: NSPopover
+    private var popoverHostingController: NSHostingController<MenuPopoverContentView>?
 
     private var cancellables: Set<AnyCancellable> = []
     private var activityTimer: Timer?
@@ -103,6 +104,7 @@ final class MenuBarController: NSObject {
         popover.behavior = .transient
         popover.animates = true
         popover.contentSize = NSSize(width: 460, height: 520)
+        installPopoverContentIfNeeded()
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -152,7 +154,24 @@ final class MenuBarController: NSObject {
             return
         }
 
-        let content = MenuPopoverContentView(
+        installPopoverContentIfNeeded()
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+    }
+
+    /// Beginner note: Install one persistent hosting controller to avoid rebuilding the
+    /// whole popover view hierarchy every open/close cycle.
+    private func installPopoverContentIfNeeded() {
+        guard popoverHostingController == nil else {
+            return
+        }
+        let hosting = NSHostingController(rootView: makeMenuPopoverContentView())
+        popover.contentViewController = hosting
+        popoverHostingController = hosting
+    }
+
+    /// Beginner note: This method centralizes popover callback wiring.
+    private func makeMenuPopoverContentView() -> MenuPopoverContentView {
+        MenuPopoverContentView(
             viewModel: viewModel,
             editorPluginRegistry: editorPluginRegistry,
             // Menu actions intentionally route back into view model/service flows.
@@ -166,10 +185,6 @@ final class MenuBarController: NSObject {
             onForceResetMounts: { [weak self] in self?.forceResetAllMounts() },
             onQuit: { [weak self] in self?.quitApp() }
         )
-
-        let hosting = NSHostingController(rootView: content)
-        popover.contentViewController = hosting
-        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -177,15 +192,14 @@ final class MenuBarController: NSObject {
         guard let button = statusItem.button else {
             return
         }
+        let appName = Self.appDisplayName()
 
         // These computed values drive both icon color and tooltip content.
-        let counts = statusCounts()
+        let summary = viewModel.connectionSummary()
         let activeOperations = currentActiveOperations()
         let recoveryIndicator = viewModel.recoveryIndicator
         let wakePulseActive = (viewModel.wakeAnimationUntil ?? .distantPast) > Date()
-        let reconnectingCount = viewModel.remotes.reduce(0) { partial, remote in
-            partial + (viewModel.isRemoteInRecoveryReconnect(remote.id) ? 1 : 0)
-        }
+        let reconnectingCount = summary.reconnecting
         let hasActivityAnimation = wakePulseActive || !activeOperations.isEmpty || recoveryIndicator != nil || reconnectingCount > 0
         setActivityTimerEnabled(hasActivityAnimation)
 
@@ -194,20 +208,22 @@ final class MenuBarController: NSObject {
         // 2) warning icon if dependencies/errors
         // 3) normal icon
         let symbolCandidates: [String]
-        if hasActivityAnimation {
+        if hasActivityAnimation, !activitySymbols.isEmpty {
             symbolCandidates = [activitySymbols[activityFrame % activitySymbols.count], "arrow.triangle.2.circlepath"] + defaultSymbols
-        } else if (viewModel.dependencyStatus?.isReady == false) || counts.errors > 0 {
+        } else if hasActivityAnimation {
+            symbolCandidates = ["arrow.triangle.2.circlepath"] + defaultSymbols
+        } else if (viewModel.dependencyStatus?.isReady == false) || summary.errors > 0 {
             symbolCandidates = ["exclamationmark.triangle"] + defaultSymbols
         } else {
             symbolCandidates = defaultSymbols
         }
 
         let selectedSymbolName = symbolCandidates.first { symbolName in
-            NSImage(systemSymbolName: symbolName, accessibilityDescription: "macfuseGui") != nil
+            NSImage(systemSymbolName: symbolName, accessibilityDescription: appName) != nil
         }
 
         if let selectedSymbolName,
-           let icon = NSImage(systemSymbolName: selectedSymbolName, accessibilityDescription: "macfuseGui") {
+           let icon = NSImage(systemSymbolName: selectedSymbolName, accessibilityDescription: appName) {
             let symbolConfig = NSImage.SymbolConfiguration(pointSize: 15, weight: .bold)
             let configured = icon.withSymbolConfiguration(symbolConfig) ?? icon
             configured.isTemplate = true
@@ -215,7 +231,7 @@ final class MenuBarController: NSObject {
             // Orange count means sleep/reconnect/recovery activity.
             // Green count means steady connected state.
             let countColor: NSColor = (viewModel.systemSleeping || reconnectingCount > 0 || recoveryIndicator != nil) ? .systemOrange : .systemGreen
-            applyConnectedCountLabel(connectedCount: counts.connected, color: countColor, to: button)
+            applyConnectedCountLabel(connectedCount: summary.connected, color: countColor, to: button)
         } else {
             button.image = nil
             button.attributedTitle = NSAttributedString(string: "")
@@ -223,11 +239,12 @@ final class MenuBarController: NSObject {
         }
 
         button.toolTip = statusTooltip(
-            counts: counts,
+            summary: summary,
             activeOperations: activeOperations,
             recoveryIndicator: recoveryIndicator,
             reconnectingCount: reconnectingCount
         )
+        button.setAccessibilityLabel("\(appName) — \(summary.connected) connected")
         button.needsDisplay = true
         button.displayIfNeeded()
     }
@@ -258,29 +275,12 @@ final class MenuBarController: NSObject {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func handleActivityTimerTick() {
+        guard !activitySymbols.isEmpty else {
+            updateStatusItemIndicator()
+            return
+        }
         activityFrame = (activityFrame + 1) % activitySymbols.count
         updateStatusItemIndicator()
-    }
-
-    /// Beginner note: This method is one step in the feature workflow for this file.
-    private func statusCounts() -> (connected: Int, active: Int, errors: Int, disconnected: Int) {
-        var counts = (connected: 0, active: 0, errors: 0, disconnected: 0)
-
-        for remote in viewModel.remotes {
-            switch viewModel.status(for: remote.id).state {
-            case .connected:
-                counts.connected += 1
-                counts.active += 1
-            case .connecting, .disconnecting:
-                counts.active += 1
-            case .error:
-                counts.errors += 1
-            case .disconnected:
-                counts.disconnected += 1
-            }
-        }
-
-        return counts
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -298,12 +298,12 @@ final class MenuBarController: NSObject {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func statusTooltip(
-        counts: (connected: Int, active: Int, errors: Int, disconnected: Int),
+        summary: RemotesViewModel.ConnectionSummary,
         activeOperations: [(name: String, state: RemoteConnectionState, startedAt: Date)],
         recoveryIndicator: RemotesViewModel.RecoveryIndicator?,
         reconnectingCount: Int
     ) -> String {
-        var lines: [String] = ["macfuseGui"]
+        var lines: [String] = [Self.appDisplayName()]
         if !activeOperations.isEmpty {
             let details = activeOperations
                 .map { "\(humanLabel(for: $0.state)) \($0.name) (\(elapsedText(since: $0.startedAt)))" }
@@ -319,7 +319,9 @@ final class MenuBarController: NSObject {
                 "Recovery \(reason): pending \(recoveryIndicator.pendingRemoteCount), queued \(recoveryIndicator.scheduledReconnectCount) (\(elapsedText(since: recoveryIndicator.startedAt)))"
             )
         }
-        lines.append("Connected \(counts.connected) • Active \(counts.active) • Errors \(counts.errors) • Disconnected \(counts.disconnected)")
+        lines.append(
+            "Connected \(summary.connected) • Active \(summary.active) • Errors \(summary.errors) • Disconnected \(summary.disconnected)"
+        )
         return lines.joined(separator: "\n")
     }
 
@@ -372,6 +374,18 @@ final class MenuBarController: NSObject {
             return "\(minutes)m \(seconds)s"
         }
         return "\(seconds)s"
+    }
+
+    nonisolated static func appDisplayName() -> String {
+        let displayName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+        if let displayName, !displayName.isEmpty {
+            return displayName
+        }
+        let bundleName = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String
+        if let bundleName, !bundleName.isEmpty {
+            return bundleName
+        }
+        return "macfuseGui"
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -506,7 +520,7 @@ final class MenuBarController: NSObject {
             for attempt in pluginResult.attempts {
                 let output = compactDiagnosticText(attempt.output.isEmpty ? "exit \(attempt.exitCode)" : attempt.output)
                 let statusText = attempt.success ? "success" : "failure"
-                let message = "editor attempt pluginID=\(pluginResult.pluginID) plugin=\(pluginResult.pluginDisplayName) label=\(attempt.label) executable=\(attempt.executable) args=\(attempt.arguments.joined(separator: " ")) timeoutSec=\(String(format: "%.1f", attempt.timeoutSeconds)) status=\(statusText) exit=\(attempt.exitCode) timedOut=\(attempt.timedOut) output=\(output)"
+                let message = "editor attempt pluginID=\(pluginResult.pluginID) plugin=\(pluginResult.pluginDisplayName) label=\(attempt.label) executable=\(attempt.executable) args=\(attempt.arguments.joined(separator: " ")) timeoutSec=\(String(format: "%.1f", attempt.timeoutSeconds)) status=\(statusText) exit=\(attempt.exitCode) timedOut=\(attempt.timedOut) failedToStart=\(attempt.failedToStart) output=\(output)"
                 viewModel.appendDiagnostic(
                     level: attempt.success ? .info : .debug,
                     category: category,
@@ -543,16 +557,9 @@ final class MenuBarController: NSObject {
     }
 
     private func compactDiagnosticText(_ value: String, limit: Int = 180) -> String {
-        let normalized = value
-            .replacingOccurrences(of: "\n", with: " ")
-            .replacingOccurrences(of: "\t", with: " ")
-            .replacingOccurrences(of: "  ", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = value.collapsedAndTruncatedForDisplay(limit: limit)
 
-        if normalized.count <= limit {
-            return normalized
-        }
-        return String(normalized.prefix(limit)) + "…"
+        return normalized
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -600,7 +607,7 @@ private struct MenuPopoverContentView: View {
                             RemotePopoverRow(
                                 remote: remote,
                                 status: viewModel.status(for: remote.id),
-                                badgeStateRawValue: viewModel.statusBadgeRawValue(for: remote.id),
+                                badgeState: viewModel.statusBadgeState(for: remote.id),
                                 preferredPluginDisplayName: preferredPluginDisplayName,
                                 activeEditorPlugins: activeEditorPlugins,
                                 onConnect: { onConnect(remote.id) },
@@ -635,7 +642,7 @@ private struct MenuPopoverContentView: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("macfuseGui")
+                Text(MenuBarController.appDisplayName())
                     .font(.headline)
                 Text(appVersionText)
                     .font(.caption2)
@@ -683,33 +690,7 @@ private struct MenuPopoverContentView: View {
     }
 
     private var summaryText: String {
-        var connected = 0
-        var active = 0
-        var errors = 0
-        var disconnected = 0
-        var reconnecting = 0
-
-        for remote in viewModel.remotes {
-            if viewModel.isRemoteInRecoveryReconnect(remote.id) {
-                reconnecting += 1
-                active += 1
-                continue
-            }
-
-            switch viewModel.status(for: remote.id).state {
-            case .connected:
-                connected += 1
-                active += 1
-            case .connecting, .disconnecting:
-                active += 1
-            case .error:
-                errors += 1
-            case .disconnected:
-                disconnected += 1
-            }
-        }
-
-        return "C \(connected) • R \(reconnecting) • A \(active) • E \(errors) • D \(disconnected)"
+        viewModel.connectionSummary().compactDisplayText
     }
 
     private var preferredPluginDisplayName: String {
@@ -728,14 +709,7 @@ private struct MenuPopoverContentView: View {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func recoveryReasonLabel(_ reason: String) -> String {
-        switch reason {
-        case "wake":
-            return "wake"
-        case "network-restored":
-            return "network restore"
-        default:
-            return reason
-        }
+        MenuBarController.recoveryReasonDisplayText(reason)
     }
 }
 
@@ -750,7 +724,7 @@ private struct RemotePopoverRow: View {
 
     let remote: RemoteConfig
     let status: RemoteStatus
-    let badgeStateRawValue: String
+    let badgeState: RemoteStatusBadgeState
     let preferredPluginDisplayName: String
     let activeEditorPlugins: [EditorPluginDefinition]
     let onConnect: () -> Void
@@ -779,7 +753,7 @@ private struct RemotePopoverRow: View {
                 Text(remote.displayName)
                     .font(.headline)
                 Spacer()
-                StatusBadgeView(stateRawValue: badgeStateRawValue)
+                StatusBadgeView(state: badgeState)
             }
 
             Text("\(remote.username)@\(remote.host):\(remote.port)  \(remote.remoteDirectory)")
@@ -801,13 +775,10 @@ private struct RemotePopoverRow: View {
             }
 
             HStack(spacing: 8) {
-                let canConnect = status.state == .disconnected || status.state == .error || status.state == .disconnecting
-                let canDisconnect = status.state == .connected || status.state == .connecting
-
                 Button("Connect", action: onConnect)
-                    .disabled(!canConnect)
+                    .disabled(!status.canConnect)
                 Button("Disconnect", action: onDisconnect)
-                    .disabled(!canDisconnect)
+                    .disabled(!status.canDisconnect)
 
                 switch openEditorPresentationMode {
                 case .none:

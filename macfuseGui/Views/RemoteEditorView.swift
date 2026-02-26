@@ -164,8 +164,13 @@ struct RemoteEditorView: View {
                 .disabled(viewModel.isSaving || viewModel.isTestingConnection)
 
                 Button("Save") {
-                    if let id = viewModel.save(using: remotesViewModel) {
-                        onComplete(id)
+                    Task { @MainActor in
+                        switch await viewModel.save(using: remotesViewModel) {
+                        case .success(let id):
+                            onComplete(id)
+                        case .failure:
+                            break
+                        }
                     }
                 }
                 .keyboardShortcut(.defaultAction)

@@ -33,6 +33,8 @@ final class MountCommandBuilder {
         remote: RemoteConfig,
         passwordEnvironment: [String: String] = [:]
     ) -> MountCommand {
+        let executable = sshfsPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        assert(!executable.isEmpty, "sshfsPath must not be empty.")
         let normalizedRemotePath = normalizedRemoteDirectory(remote.remoteDirectory)
 
         var options = [
@@ -45,32 +47,34 @@ final class MountCommandBuilder {
             "auto_cache",
             "StrictHostKeyChecking=accept-new",
             "ConnectTimeout=10",
-            "volname=\(volumeName(for: remote, normalizedRemotePath: normalizedRemotePath))"
+            "volname=\(escapedOptionValue(volumeName(for: remote, normalizedRemotePath: normalizedRemotePath)))"
         ]
 
         if remote.authMode == .privateKey,
            let key = remote.privateKeyPath,
            !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            options.append("IdentityFile=\(key)")
+            let normalizedKeyPath = URL(fileURLWithPath: key).standardizedFileURL.path
+            options.append("IdentityFile=\(escapedOptionValue(normalizedKeyPath))")
         }
 
-        var args: [String] = [
-            "-p", "\(remote.port)",
-            "-o", options.joined(separator: ",")
-        ]
+        var args: [String] = ["-p", "\(remote.port)"]
+        for option in options {
+            args.append("-o")
+            args.append(option)
+        }
 
         let source = "\(remote.username)@\(remote.host):\(normalizedRemotePath)"
         args.append(source)
         args.append(remote.localMountPoint)
 
         let redacted = redactionService.redactedCommand(
-            executable: sshfsPath,
+            executable: executable,
             arguments: args,
             secrets: askpassSecrets(from: passwordEnvironment)
         )
 
         return MountCommand(
-            executable: sshfsPath,
+            executable: executable,
             arguments: args,
             environment: passwordEnvironment,
             redactedCommand: redacted
@@ -89,21 +93,7 @@ final class MountCommandBuilder {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func normalizedRemoteDirectory(_ rawValue: String) -> String {
-        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return "/"
-        }
-
-        if trimmed.hasPrefix("~") {
-            return trimmed
-        }
-
-        var normalized = trimmed.replacingOccurrences(of: "\\", with: "/")
-        if isWindowsDrivePath(normalized), !normalized.hasPrefix("/") {
-            normalized = "/\(normalized)"
-        }
-
-        return normalized
+        BrowserPathNormalizer.normalize(path: rawValue)
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -125,7 +115,10 @@ final class MountCommandBuilder {
             parts.append(remote.host)
         }
 
-        return sanitizedVolumeName(parts.joined(separator: " - "))
+        return sanitizedVolumeName(
+            parts.joined(separator: " - "),
+            fallbackSeed: "\(remote.host)-\(remote.port)-\(remote.id.uuidString)"
+        )
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -146,6 +139,15 @@ final class MountCommandBuilder {
         var path = trimmed
         if path.hasPrefix("~/") {
             path.removeFirst(2)
+        } else if path.hasPrefix("~") {
+            path.removeFirst()
+            while path.hasPrefix("/") {
+                path.removeFirst()
+            }
+        }
+
+        if path.isEmpty {
+            return "home"
         }
 
         while path.count > 1 && path.hasSuffix("/") {
@@ -160,7 +162,7 @@ final class MountCommandBuilder {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
-    private func sanitizedVolumeName(_ raw: String) -> String {
+    private func sanitizedVolumeName(_ raw: String, fallbackSeed: String) -> String {
         let cleaned = raw
             .replacingOccurrences(
                 of: "[^A-Za-z0-9 ._\\-\\(\\)\\[\\]]",
@@ -170,25 +172,25 @@ final class MountCommandBuilder {
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        let fallback = cleaned.isEmpty ? "macfuseGui" : cleaned
-        return String(fallback.prefix(63))
+        let cleanedFallbackSeed = fallbackSeed
+            .replacingOccurrences(
+                of: "[^A-Za-z0-9 ._\\-\\(\\)\\[\\]]",
+                with: " ",
+                options: .regularExpression
+            )
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let fallback = cleanedFallbackSeed.isEmpty ? "macfuseGui" : cleanedFallbackSeed
+        let resolved = cleaned.isEmpty ? fallback : cleaned
+        return String(resolved.prefix(63))
     }
 
-    /// Beginner note: This method is one step in the feature workflow for this file.
-    private func isWindowsDrivePath(_ value: String) -> Bool {
-        guard value.count >= 2 else {
-            return false
-        }
-
-        let chars = Array(value)
-        guard chars[0].isLetter, chars[1] == ":" else {
-            return false
-        }
-
-        guard chars.count >= 3 else {
-            return true
-        }
-
-        return chars[2] == "/" || chars[2] == "\\"
+    /// Beginner note: sshfs parses -o values, so commas and backslashes in values
+    /// must be escaped to avoid option splitting or malformed paths.
+    private func escapedOptionValue(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: ",", with: "\\,")
     }
 }

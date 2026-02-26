@@ -111,6 +111,61 @@ final class ProcessRunnerTests: XCTestCase {
     }
 }
 
+/// Beginner note: These tests cover askpass secret-handling helpers used by mount connect.
+final class AskpassHelperTests: XCTestCase {
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    /// This can throw an error: callers should use do/try/catch or propagate the error.
+    func testMakeContextCreatesSecuredScriptAndEnvironment() throws {
+        let helper = AskpassHelper()
+        let context = try helper.makeContext(password: "topsecret")
+        defer { helper.cleanup(context) }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: context.scriptURL.path))
+        XCTAssertEqual(context.environment["SSH_ASKPASS"], context.scriptURL.path)
+        XCTAssertEqual(context.environment["SSH_ASKPASS_REQUIRE"], "force")
+        XCTAssertEqual(context.environment["DISPLAY"], "1")
+
+        guard let passwordKey = context.environment.keys.first(where: { $0.hasPrefix("MACFUSEGUI_ASKPASS_PASSWORD_") }) else {
+            XCTFail("Expected generated askpass password environment key.")
+            return
+        }
+
+        XCTAssertEqual(context.environment[passwordKey], "topsecret")
+        XCTAssertNotNil(passwordKey.range(of: "^[A-Z0-9_]+$", options: .regularExpression))
+
+        let scriptText = try String(contentsOf: context.scriptURL)
+        XCTAssertTrue(scriptText.contains("${\(passwordKey)}"))
+
+        let attributes = try FileManager.default.attributesOfItem(atPath: context.scriptURL.path)
+        let permissions = (attributes[.posixPermissions] as? NSNumber)?.intValue
+            ?? (attributes[.posixPermissions] as? Int)
+        XCTAssertEqual(permissions, 0o700)
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    /// This is async and throwing: callers must await it and handle failures.
+    func testWithContextCleansUpTemporaryDirectory() async throws {
+        let helper = AskpassHelper()
+        var scriptURL: URL?
+        var tempDirectoryURL: URL?
+
+        try await helper.withContext(password: "secret") { context in
+            scriptURL = context.scriptURL
+            tempDirectoryURL = context.temporaryDirectoryURL
+            XCTAssertTrue(FileManager.default.fileExists(atPath: context.scriptURL.path))
+            return ()
+        }
+
+        guard let scriptURL, let tempDirectoryURL else {
+            XCTFail("Expected context URLs to be captured.")
+            return
+        }
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: scriptURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: tempDirectoryURL.path))
+    }
+}
+
 /// Beginner note: These tests cover mount concurrency guarantees that protect recovery behavior.
 final class MountManagerParallelOperationTests: XCTestCase {
     /// Beginner note: This is async and throwing: callers must await it and handle failures.

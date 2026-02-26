@@ -55,6 +55,31 @@ final class RemoteDirectoryParserTests: XCTestCase {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
+    func testParsesWindowsStyleDirectoryListingWith24HourClock() {
+        let listing = """
+        18/07/2025  22:21    <DIR>          Backups
+        """
+
+        let parsed = SFTPDirectoryParser.parse(output: listing, basePath: "/C:/Users/dev")
+        let entries = parsed.entries.filter(\.isDirectory)
+        XCTAssertEqual(entries.map(\.name), ["Backups"])
+        XCTAssertNotNil(entries.first?.modifiedAt)
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func testCaseDistinctDirectoriesAreNotDeduplicated() {
+        let listing = """
+        drwxr-xr-x    2 user staff        64 Jan 10 11:00 Docs
+        drwxr-xr-x    2 user staff        64 Jan 10 11:00 docs
+        """
+
+        let parsed = SFTPDirectoryParser.parse(output: listing, basePath: "/home/user")
+        let entries = parsed.entries.filter(\.isDirectory)
+        XCTAssertEqual(entries.count, 2)
+        XCTAssertEqual(Set(entries.map(\.name)), Set(["Docs", "docs"]))
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
     func testLibSSH2ClassifierRecognizesWindowsDirMarkers() {
         let windowsDir = classify(longEntry: "07/18/2025  10:21 AM    <DIR>          wwwroot")
         let posixDir = classify(longEntry: "drwxr-xr-x 2 user staff 64 Jan 10 11:00 projects")

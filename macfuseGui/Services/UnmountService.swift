@@ -82,23 +82,11 @@ final class UnmountService {
                 return
             }
 
-            let mergedRoundFailures = lastFailures.joined(separator: "; ").lowercased()
-            if mergedRoundFailures.contains("resource busy") || mergedRoundFailures.contains("busy") {
-                // Busy-process detection is best-effort. If lsof fails (permissions, timing, or transient state),
-                // we still return a generic busy error so disconnect/connect never wedges on diagnostics work.
-                let blockers = (try? await detectBlockingProcesses(mountPoint: normalizedMountPoint)) ?? []
-                if !blockers.isEmpty {
-                    let nonSSHFSBlockers = blockers.filter { !$0.command.lowercased().contains("sshfs") }
-                    let targetBlockers = nonSSHFSBlockers.isEmpty ? blockers : nonSSHFSBlockers
-                    let summary = targetBlockers
-                        .prefix(5)
-                        .map { "\($0.command)(\($0.pid))" }
-                        .joined(separator: ", ")
-                    throw AppError.processFailure(
-                        "Mount point is busy: \(normalizedMountPoint). Blocking processes: \(summary). Close files/windows and retry."
-                    )
-                }
-            }
+            try await throwIfBusy(
+                mountPoint: normalizedMountPoint,
+                failures: lastFailures,
+                includeGenericFallback: false
+            )
 
             if round == 1 || round == 2 {
                 let forceKill = round == 2
@@ -126,7 +114,8 @@ final class UnmountService {
                 // Only sleep if we still have time left in the overall unmount budget.
                 let remaining = deadline.timeIntervalSinceNow
                 if remaining > 0.6 {
-                    // Best-effort delay only. Ignore cancellation so callers do not treat sleep as an unmount failure.
+                    // Best-effort delay only. Ignore CancellationError here to avoid
+                    // surfacing the pause itself as an unmount failure.
                     try? await Task.sleep(nanoseconds: 500_000_000)
                 }
             }
@@ -140,30 +129,18 @@ final class UnmountService {
             return
         }
 
-        let mergedFailures = lastFailures.joined(separator: "; ")
-        let lowerFailures = mergedFailures.lowercased()
-        if lowerFailures.contains("resource busy") || lowerFailures.contains("busy") {
-            let blockers = (try? await detectBlockingProcesses(mountPoint: normalizedMountPoint)) ?? []
-            if !blockers.isEmpty {
-                let summary = blockers
-                    .prefix(5)
-                    .map { "\($0.command)(\($0.pid))" }
-                    .joined(separator: ", ")
-                throw AppError.processFailure(
-                    "Mount point is busy: \(normalizedMountPoint). Blocking processes: \(summary). Close files/windows and retry."
-                )
-            } else {
-                throw AppError.processFailure(
-                    "Mount point is busy: \(normalizedMountPoint). Close Finder windows or files using this mount and retry."
-                )
-            }
-        }
+        try await throwIfBusy(
+            mountPoint: normalizedMountPoint,
+            failures: lastFailures,
+            includeGenericFallback: true
+        )
 
         throw AppError.processFailure("Failed to unmount \(normalizedMountPoint).")
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
-    func parseBlockingProcesses(from output: String) -> [UnmountBlockingProcess] {
+    /// Kept internal for unit tests that validate parsing edge cases.
+    internal func parseBlockingProcesses(from output: String) -> [UnmountBlockingProcess] {
         var results: [UnmountBlockingProcess] = []
         var seenPIDs: Set<Int32> = []
         var currentPID: Int32?
@@ -277,6 +254,42 @@ final class UnmountService {
         return try await !isMounted(mountPoint, deadline: deadline)
     }
 
+    /// Beginner note: Centralize "busy" failure handling so in-loop and final-path
+    /// behavior remain consistent as parsing/formatting evolves.
+    private func throwIfBusy(
+        mountPoint: String,
+        failures: [String],
+        includeGenericFallback: Bool
+    ) async throws {
+        let mergedFailures = failures.joined(separator: "; ").lowercased()
+        guard mergedFailures.contains("resource busy") || mergedFailures.contains("busy") else {
+            return
+        }
+
+        // Busy-process detection is best-effort. If lsof fails (permissions, timing, or
+        // transient state), we may have no blockers and fall back to a generic busy error.
+        let blockers = (try? await detectBlockingProcesses(mountPoint: mountPoint)) ?? []
+        if !blockers.isEmpty {
+            let nonSSHFSBlockers = blockers.filter { !$0.command.lowercased().contains("sshfs") }
+            let targetBlockers = nonSSHFSBlockers.isEmpty ? blockers : nonSSHFSBlockers
+            let summary = targetBlockers
+                .prefix(5)
+                .map { "\($0.command)(\($0.pid))" }
+                .joined(separator: ", ")
+            throw AppError.processFailure(
+                "Mount point is busy: \(mountPoint). Blocking processes: \(summary). Close files/windows and retry."
+            )
+        }
+
+        guard includeGenericFallback else {
+            return
+        }
+
+        throw AppError.processFailure(
+            "Mount point is busy: \(mountPoint). Close Finder windows or files using this mount and retry."
+        )
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This is async and throwing: callers must await it and handle failures.
     private func terminateSSHFSProcesses(mountPoint: String, mountSource: String?, forceKill: Bool) async throws {
@@ -315,6 +328,14 @@ final class UnmountService {
         )
 
         guard result.exitCode == 0 else {
+            let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            let stdout = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+            let detail = stderr.isEmpty ? stdout : stderr
+            diagnostics.append(
+                level: .warning,
+                category: "unmount",
+                message: "ps failed (exit \(result.exitCode)) while finding sshfs pids for \(mountPoint)\(detail.isEmpty ? "" : ": \(detail)")"
+            )
             return []
         }
 
@@ -415,6 +436,12 @@ final class UnmountService {
         )
 
         guard fallback.exitCode == 0, !fallback.timedOut else {
+            // Conservative fallback: assume still mounted if we cannot confirm otherwise.
+            diagnostics.append(
+                level: .warning,
+                category: "unmount",
+                message: "df fallback could not verify mount state for \(mountPoint) (exit=\(fallback.exitCode), timedOut=\(fallback.timedOut)); assuming mounted."
+            )
             return true
         }
 
@@ -422,12 +449,24 @@ final class UnmountService {
             .split(separator: "\n", omittingEmptySubsequences: true)
             .map(String.init)
         guard lines.count >= 2 else {
+            // Conservative fallback: assume still mounted if we cannot confirm otherwise.
+            diagnostics.append(
+                level: .warning,
+                category: "unmount",
+                message: "df fallback returned incomplete output for \(mountPoint); assuming mounted."
+            )
             return true
         }
 
         let dataLine = lines.last ?? ""
         let fields = dataLine.split(whereSeparator: { $0.isWhitespace }).map(String.init)
         guard let mountedField = fields.last else {
+            // Conservative fallback: assume still mounted if we cannot confirm otherwise.
+            diagnostics.append(
+                level: .warning,
+                category: "unmount",
+                message: "df fallback could not parse mounted path for \(mountPoint); assuming mounted."
+            )
             return true
         }
 
@@ -524,6 +563,7 @@ final class UnmountService {
             }
 
             seen.insert(pid)
+            // Table mode usually includes a trailing path column; field mode can be nil.
             let path = columns.last.map(String.init)
             blockers.append(UnmountBlockingProcess(command: command, pid: pid, path: path))
         }

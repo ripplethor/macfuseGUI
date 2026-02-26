@@ -74,6 +74,19 @@ private actor OperationLimiter {
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 final class RemotesViewModel: ObservableObject {
+    /// Beginner note: Unified connection summary used by menu-bar badge/tooltip and popover header.
+    struct ConnectionSummary: Equatable, Sendable {
+        var connected: Int
+        var reconnecting: Int
+        var active: Int
+        var errors: Int
+        var disconnected: Int
+
+        var compactDisplayText: String {
+            "C \(connected) • R \(reconnecting) • A \(active) • E \(errors) • D \(disconnected)"
+        }
+    }
+
     /// Beginner note: This type groups related state and behavior for one part of the app.
     /// Read stored properties first, then follow methods top-to-bottom to understand flow.
     struct RecoveryIndicator: Equatable, Sendable {
@@ -246,8 +259,8 @@ final class RemotesViewModel: ObservableObject {
     private var passwordCache: [UUID: String] = [:]
 
     // Browser path memory limits (kept here so UI and persistence use one rule).
-    nonisolated static let favoritesLimit = 20
-    nonisolated static let recentsLimit = 15
+    nonisolated static let favoritesLimit = RemoteConfig.favoriteDirectoryLimit
+    nonisolated static let recentsLimit = RemoteConfig.recentDirectoryLimit
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init(
@@ -382,15 +395,57 @@ final class RemotesViewModel: ObservableObject {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     func status(for remoteID: UUID) -> RemoteStatus {
-        statuses[remoteID] ?? .disconnected
+        statuses[remoteID] ?? .initial
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func connectionSummary() -> ConnectionSummary {
+        var connected = 0
+        var active = 0
+        var errors = 0
+        var disconnected = 0
+        var reconnecting = 0
+
+        for remote in remotes {
+            if isRemoteInRecoveryReconnect(remote.id) {
+                reconnecting += 1
+                active += 1
+                continue
+            }
+
+            switch status(for: remote.id).state {
+            case .connected:
+                connected += 1
+                active += 1
+            case .connecting, .disconnecting:
+                active += 1
+            case .error:
+                errors += 1
+            case .disconnected:
+                disconnected += 1
+            }
+        }
+
+        return ConnectionSummary(
+            connected: connected,
+            reconnecting: reconnecting,
+            active: active,
+            errors: errors,
+            disconnected: disconnected
+        )
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func statusBadgeState(for remoteID: UUID) -> RemoteStatusBadgeState {
+        if isRemoteInRecoveryReconnect(remoteID) {
+            return .reconnecting
+        }
+        return RemoteStatusBadgeState(connectionState: status(for: remoteID).state)
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     func statusBadgeRawValue(for remoteID: UUID) -> String {
-        if isRemoteInRecoveryReconnect(remoteID) {
-            return "reconnecting"
-        }
-        return status(for: remoteID).state.rawValue
+        statusBadgeState(for: remoteID).rawValue
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -1697,7 +1752,7 @@ final class RemotesViewModel: ObservableObject {
         diagnostics.append(
             level: .info,
             category: "recovery",
-            message: "Wake preflight cleanup for \(targets.count) desired remote(s) (parallel, aggressive unmount)."
+            message: "Wake preflight cleanup for \(targets.count) desired remote(s) (parallel, fast force-unmount)."
         )
 
         // Cancel any in-flight per-remote operations before cleanup starts.
@@ -1725,7 +1780,7 @@ final class RemotesViewModel: ObservableObject {
                         for: remote,
                         queuedAt: forceStopQueuedAt,
                         operationID: nil,
-                        aggressiveUnmount: true
+                        fastForceUnmount: true
                     )
                     return (remote.id, remote.displayName)
                 }
@@ -2733,7 +2788,7 @@ final class RemotesViewModel: ObservableObject {
         }
         let remote = draft.asRemoteConfig()
         let passwordToUse = try await browserPassword(for: draft)
-        let sessionID = try await remoteDirectoryBrowserService.openSession(remote: remote, password: passwordToUse)
+        let sessionID = await remoteDirectoryBrowserService.openSession(remote: remote, password: passwordToUse)
         activeBrowserSessions.insert(sessionID)
         diagnostics.append(level: .info, category: "remote-browser", message: "Started browser session \(sessionID.uuidString) for \(remote.displayName)")
         return sessionID
@@ -2763,8 +2818,16 @@ final class RemotesViewModel: ObservableObject {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This is async: it can suspend and resume later without blocking a thread.
-    func retryCurrentBrowserPath(sessionID: RemoteBrowserSessionID, requestID: UInt64) async -> RemoteBrowserSnapshot {
-        await remoteDirectoryBrowserService.retryCurrentPath(sessionID: sessionID, requestID: requestID)
+    func retryCurrentBrowserPath(
+        sessionID: RemoteBrowserSessionID,
+        lastKnownPath: String,
+        requestID: UInt64
+    ) async -> RemoteBrowserSnapshot {
+        await remoteDirectoryBrowserService.retryCurrentPath(
+            sessionID: sessionID,
+            lastKnownPath: lastKnownPath,
+            requestID: requestID
+        )
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.

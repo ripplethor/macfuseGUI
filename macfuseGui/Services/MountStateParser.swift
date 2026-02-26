@@ -17,10 +17,14 @@ final class MountStateParser {
             .split(separator: "\n", omittingEmptySubsequences: true)
             .compactMap { line in
                 let lineString = String(line)
-                guard let onRange = lineString.range(of: " on ") else {
+                guard let typeStart = lineString.range(of: " (", options: .backwards) else {
                     return nil
                 }
-                guard let typeStart = lineString.range(of: " (", range: onRange.upperBound..<lineString.endIndex) else {
+                guard let onRange = lineString.range(
+                    of: " on ",
+                    options: .backwards,
+                    range: lineString.startIndex..<typeStart.lowerBound
+                ) else {
                     return nil
                 }
                 guard let typeEnd = lineString[typeStart.upperBound...].firstIndex(of: ")") else {
@@ -36,12 +40,12 @@ final class MountStateParser {
                         .trimmingCharacters(in: .whitespacesAndNewlines)
                 )
                 let fsType = lineString[typeStart.upperBound..<typeEnd]
-                    .split(separator: ",", maxSplits: 1)
+                    .split(separator: ",", maxSplits: 1, omittingEmptySubsequences: false)
                     .first
                     .map(String.init)?
                     .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-                guard !source.isEmpty, !mountPoint.isEmpty else {
+                guard !source.isEmpty, !mountPoint.isEmpty, !fsType.isEmpty else {
                     return nil
                 }
 
@@ -51,21 +55,74 @@ final class MountStateParser {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     func record(forMountPoint mountPoint: String, from records: [MountRecord]) -> MountRecord? {
-        records.first { normalize($0.mountPoint) == normalize(mountPoint) }
+        let normalizedTarget = normalize(mountPoint)
+        return records.first { normalize($0.mountPoint) == normalizedTarget }
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func normalize(_ path: String) -> String {
+        // Keep this lexical-only (no symlink resolution) so status probes avoid filesystem I/O.
         URL(fileURLWithPath: path).standardizedFileURL.path
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func decodeEscapedMountField(_ value: String) -> String {
-        var output = value
-        output = output.replacingOccurrences(of: "\\040", with: " ")
-        output = output.replacingOccurrences(of: "\\011", with: "\t")
-        output = output.replacingOccurrences(of: "\\012", with: "\n")
-        output = output.replacingOccurrences(of: "\\\\", with: "\\")
+        let characters = Array(value)
+        var output = String()
+        output.reserveCapacity(characters.count)
+        var index = 0
+
+        while index < characters.count {
+            let current = characters[index]
+            guard current == "\\" else {
+                output.append(current)
+                index += 1
+                continue
+            }
+
+            guard index + 1 < characters.count else {
+                output.append("\\")
+                index += 1
+                continue
+            }
+
+            let next = characters[index + 1]
+            if next == "\\" {
+                output.append("\\")
+                index += 2
+                continue
+            }
+
+            if index + 3 < characters.count {
+                let octal1 = characters[index + 1]
+                let octal2 = characters[index + 2]
+                let octal3 = characters[index + 3]
+                if octal1.isOctalDigit, octal2.isOctalDigit, octal3.isOctalDigit {
+                    let octalText = String([octal1, octal2, octal3])
+                    if let scalarValue = UInt32(octalText, radix: 8),
+                       let scalar = UnicodeScalar(scalarValue) {
+                        output.unicodeScalars.append(scalar)
+                        index += 4
+                        continue
+                    }
+                }
+            }
+
+            // Preserve unknown escapes as-is.
+            output.append("\\")
+            output.append(next)
+            index += 2
+        }
+
         return output
+    }
+}
+
+private extension Character {
+    var isOctalDigit: Bool {
+        guard let scalar = unicodeScalars.first, unicodeScalars.count == 1 else {
+            return false
+        }
+        return scalar.value >= 48 && scalar.value <= 55
     }
 }

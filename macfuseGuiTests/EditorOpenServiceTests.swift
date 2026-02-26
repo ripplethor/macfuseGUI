@@ -146,6 +146,42 @@ final class EditorOpenServiceTests: XCTestCase {
         XCTAssertTrue(result.pluginResults.isEmpty)
     }
 
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func testLaunchAttemptFailedToStartIsCaptured() async throws {
+        let context = try makeContext()
+        let registry = makeRegistry(context: context)
+        let runner = FakeEditorRunner(scriptedResults: [.startFailure])
+        let service = EditorOpenService(pluginRegistry: registry, runner: runner)
+
+        let result = await service.open(
+            folderURL: URL(fileURLWithPath: "/tmp/editor-open-tests/project", isDirectory: true),
+            remoteName: "Remote F",
+            mode: .explicit(pluginID: "vscode")
+        )
+
+        XCTAssertFalse(result.success)
+        let attempt = try XCTUnwrap(result.pluginResults.first?.attempts.first)
+        XCTAssertTrue(attempt.failedToStart)
+        XCTAssertFalse(attempt.timedOut)
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func testExplicitInactivePluginMessageUsesDisplayNameWhenAvailable() async throws {
+        let context = try makeContext()
+        let registry = makeRegistry(context: context)
+        let runner = FakeEditorRunner(scriptedResults: [])
+        let service = EditorOpenService(pluginRegistry: registry, runner: runner)
+
+        let result = await service.open(
+            folderURL: URL(fileURLWithPath: "/tmp/editor-open-tests/project", isDirectory: true),
+            remoteName: "Remote G",
+            mode: .explicit(pluginID: "cursor")
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.message, "Editor plugin 'Cursor' is not active.")
+    }
+
     private func makeRegistry(context: (appSupportDirectory: URL, defaults: UserDefaults)) -> EditorPluginRegistry {
         EditorPluginRegistry(
             fileManager: .default,
@@ -193,6 +229,7 @@ private actor FakeEditorRunner: ProcessRunning {
     enum ScriptedResult: Sendable {
         case success
         case failure
+        case startFailure
     }
 
     private var scriptedResults: [ScriptedResult]
@@ -241,6 +278,9 @@ private actor FakeEditorRunner: ProcessRunning {
                 timedOut: false,
                 duration: 0.01
             )
+
+        case .startFailure:
+            throw AppError.processFailure("Failed to start process: executable not found")
         }
     }
 

@@ -26,6 +26,7 @@ extension Notification.Name {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var environment: AppEnvironment?
     private var menuBarController: MenuBarController?
+    // NSEvent monitor tokens are opaque Any; store token so it can be removed on termination.
     private var keyboardMonitor: Any?
     private var terminationFallback: DispatchWorkItem?
     private var terminationTask: Task<Void, Never>?
@@ -33,6 +34,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // File descriptor for singleton lock file. `-1` means no lock held.
     // We keep this open for process lifetime so flock lock stays active.
     private var singletonLockFD: CInt = -1
+    private static let terminationTimeout: TimeInterval = 15.0
+    private static let maxModalTeardownPasses = 8
+    private static let maxSheetTeardownPasses = 8
+    private static let singletonLockFileName = "com.visualweb.macfusegui.instance.lock"
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -43,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if !acquireSingletonLock() {
-            _ = shouldTerminateAsDuplicateInstance()
+            _ = activateExistingDuplicateInstanceIfPresent()
             NSApp.terminate(nil)
             return
         }
@@ -55,7 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // When running unit tests, Xcode launches a copy of the app as the "test host".
         // If the real app is already running, the duplicate-instance guard would
         // immediately terminate the test host and cause "early unexpected exit" failures.
-        if shouldTerminateAsDuplicateInstance() {
+        if activateExistingDuplicateInstanceIfPresent() {
             NSApp.terminate(nil)
             return
         }
@@ -81,14 +86,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 editorOpenService: environment.editorOpenService
             )
 
-            Task { @MainActor [weak self] in
-                guard self != nil else {
-                    return
-                }
-                // First refresh from real mount state, then run startup auto-connect intent.
-                await environment.remotesViewModel.refreshAllStatuses()
-                await environment.remotesViewModel.runStartupAutoConnect()
-            }
+            // First refresh from real mount state, then run startup auto-connect intent.
+            await environment.remotesViewModel.refreshAllStatuses()
+            await environment.remotesViewModel.runStartupAutoConnect()
         }
     }
 
@@ -131,7 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Lets any listeners proactively stop background work.
         NotificationCenter.default.post(name: .forceQuitRequested, object: nil)
         // Give termination cleanup enough runway to force-stop/unmount sshfs mounts.
-        scheduleTerminationFallback(after: 15.0)
+        scheduleTerminationFallback(after: Self.terminationTimeout)
         // Close modal/sheet/window stacks first to avoid quit being blocked by UI state.
         closeAllWindowsForTermination()
 
@@ -157,7 +157,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func closeAllWindowsForTermination() {
         // Modal loops can block app termination; abort/stop repeatedly as defensive cleanup.
         var modalTeardownPasses = 0
-        while let modalWindow = NSApp.modalWindow, modalTeardownPasses < 8 {
+        while let modalWindow = NSApp.modalWindow, modalTeardownPasses < Self.maxModalTeardownPasses {
             modalTeardownPasses += 1
             NSApp.abortModal()
             NSApp.stopModal()
@@ -166,7 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         var sheetTeardownPasses = 0
-        while sheetTeardownPasses < 8 {
+        while sheetTeardownPasses < Self.maxSheetTeardownPasses {
             sheetTeardownPasses += 1
             let windowsWithSheets = NSApp.windows.filter { $0.attachedSheet != nil }
             if windowsWithSheets.isEmpty {
@@ -199,6 +199,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func performTerminationPass() {
+        // Second pass is intentional in case async cleanup surfaced new windows/sheets.
         closeAllWindowsForTermination()
         NSApp.stop(nil)
         NSApp.terminate(nil)
@@ -210,6 +211,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Hard fallback: ensures Quit always exits even if modal teardown gets stuck.
         // _exit is intentionally last-resort and bypasses normal teardown callbacks.
+        // The OS will close open FDs on process exit, including the singleton lock FD.
         let fallback = DispatchWorkItem {
             _exit(0)
         }
@@ -243,7 +245,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(appMenuItem)
 
         let appMenu = NSMenu()
-        let quitItem = NSMenuItem(title: "Quit macfuseGui", action: #selector(handleQuitMenuAction(_:)), keyEquivalent: "q")
+        let appName = Bundle.main.object(forInfoDictionaryKey: kCFBundleNameKey as String) as? String ?? "App"
+        let quitItem = NSMenuItem(title: "Quit \(appName)", action: #selector(handleQuitMenuAction(_:)), keyEquivalent: "q")
         quitItem.target = self
         appMenu.addItem(quitItem)
         appMenuItem.submenu = appMenu
@@ -252,7 +255,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
-    private func shouldTerminateAsDuplicateInstance() -> Bool {
+    /// Activates an already-running app instance and returns true when current process should terminate.
+    private func activateExistingDuplicateInstanceIfPresent() -> Bool {
         let currentPID = ProcessInfo.processInfo.processIdentifier
         let bundleIdentifier = Bundle.main.bundleIdentifier
         let executableName = Bundle.main.executableURL?.lastPathComponent
@@ -300,7 +304,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .first
 
-        existingInstance?.activate(options: [.activateIgnoringOtherApps])
+        if #available(macOS 14.0, *) {
+            _ = existingInstance?.activate()
+        } else {
+            existingInstance?.activate(options: [.activateIgnoringOtherApps])
+        }
         NSLog(
             "[app] Duplicate instance detected. Existing pid=%d, current pid=%d. Terminating current process.",
             existingInstance?.processIdentifier ?? -1,
@@ -312,7 +320,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Beginner note: Tries to become the single app instance using an OS file lock.
     /// If another process already holds the lock, this returns false.
     private func acquireSingletonLock() -> Bool {
-        let lockPath = "/tmp/com.visualweb.macfusegui.instance.lock"
+        let lockPath = (NSTemporaryDirectory() as NSString).appendingPathComponent(Self.singletonLockFileName)
         let fd = open(lockPath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
         guard fd >= 0 else {
             // If lock setup fails, continue with bundle-id duplicate detection path.

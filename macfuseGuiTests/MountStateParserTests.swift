@@ -53,4 +53,58 @@ final class MountStateParserTests: XCTestCase {
         XCTAssertEqual(records[0].mountPoint, "/Users/philip/MACFUSE REMOTES/Test Space")
         XCTAssertNotNil(parser.record(forMountPoint: "/Users/philip/MACFUSE REMOTES/Test Space", from: records))
     }
+
+    /// Beginner note: This method verifies escaped backslashes do not get misread as octal escapes.
+    func testParsePreservesEscapedBackslashBeforeOctalDigits() {
+        let output = """
+        dev@host:/remote\\\\040literal on /Volumes/test (macfuse_sshfs, nodev)
+        """
+
+        let parser = MountStateParser()
+        let records = parser.parseMountOutput(output)
+
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records[0].source, "dev@host:/remote\\040literal")
+        XCTAssertEqual(records[0].mountPoint, "/Volumes/test")
+    }
+
+    /// Beginner note: This method verifies generic octal escape decoding beyond space/tab/newline.
+    func testParseDecodesGeneralOctalEscapes() {
+        let output = """
+        dev@host:/remote\\072name on /Volumes/test\\072dir (macfuse_sshfs, nodev)
+        """
+
+        let parser = MountStateParser()
+        let records = parser.parseMountOutput(output)
+
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records[0].source, "dev@host:/remote:name")
+        XCTAssertEqual(records[0].mountPoint, "/Volumes/test:dir")
+    }
+
+    /// Beginner note: This method verifies parser uses the delimiter nearest the type block.
+    func testParseUsesLastOnDelimiterBeforeTypeBlock() {
+        let output = """
+        source on token on /Volumes/real (macfuse_sshfs, nodev)
+        """
+
+        let parser = MountStateParser()
+        let records = parser.parseMountOutput(output)
+
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records[0].source, "source on token")
+        XCTAssertEqual(records[0].mountPoint, "/Volumes/real")
+    }
+
+    /// Beginner note: This method ensures malformed filesystem-type segments are ignored.
+    func testParseSkipsRecordWhenFilesystemTypeIsEmpty() {
+        let output = """
+        dev@host:/remote on /Volumes/test (, nodev)
+        """
+
+        let parser = MountStateParser()
+        let records = parser.parseMountOutput(output)
+
+        XCTAssertTrue(records.isEmpty)
+    }
 }

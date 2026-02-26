@@ -10,17 +10,20 @@ import Foundation
 
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
-struct MountRecord: Equatable, Sendable {
+struct MountRecord: Identifiable, Hashable, Codable, Sendable {
     let source: String
     let mountPoint: String
     let filesystemType: String
+
+    var id: String { mountPoint }
 }
 
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
-struct RemoteDirectoryEntry: Identifiable, Equatable, Sendable {
+struct RemoteDirectoryEntry: Identifiable, Hashable, Codable, Sendable {
     let name: String
     let fullPath: String
 
+    // Assumed unique for a single listing response.
     var id: String { fullPath }
 }

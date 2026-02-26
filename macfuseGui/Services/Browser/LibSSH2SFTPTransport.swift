@@ -43,12 +43,26 @@ extension BrowserTransport {
 final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
     private let diagnostics: DiagnosticsService
     private let bridgeQueue = DispatchQueue(label: "com.visualweb.macfusegui.browser.libssh2", qos: .userInitiated)
+    private let bridgeQueueSpecificKey = DispatchSpecificKey<UInt8>()
+    private let bridgeQueueSpecificValue: UInt8 = 1
     private let listTimeoutSeconds: TimeInterval
     private let pingTimeoutSeconds: TimeInterval
     private var sessions: [UUID: UnsafeMutablePointer<macfusegui_libssh2_session_handle>] = [:]
 
     private func assertOnBridgeQueue() {
         dispatchPrecondition(condition: .onQueue(bridgeQueue))
+    }
+
+    private func isOnBridgeQueue() -> Bool {
+        DispatchQueue.getSpecific(key: bridgeQueueSpecificKey) == bridgeQueueSpecificValue
+    }
+
+    private func closeAllSessionsOnBridgeQueue() {
+        assertOnBridgeQueue()
+        for (_, handle) in sessions {
+            macfusegui_libssh2_close_session(handle)
+        }
+        sessions.removeAll()
     }
 
     /// Beginner note: Initializers create valid state before any other method is used.
@@ -60,15 +74,19 @@ final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
         self.diagnostics = diagnostics
         self.listTimeoutSeconds = listTimeoutSeconds
         self.pingTimeoutSeconds = pingTimeoutSeconds
+        bridgeQueue.setSpecific(key: bridgeQueueSpecificKey, value: bridgeQueueSpecificValue)
     }
 
     /// Beginner note: Deinitializer runs during teardown to stop background work and free resources.
     deinit {
+        if isOnBridgeQueue() {
+            assertionFailure("LibSSH2SFTPTransport deinit called on bridge queue; closing sessions inline to avoid deadlock.")
+            closeAllSessionsOnBridgeQueue()
+            return
+        }
+
         bridgeQueue.sync {
-            for (_, handle) in sessions {
-                macfusegui_libssh2_close_session(handle)
-            }
-            sessions.removeAll()
+            closeAllSessionsOnBridgeQueue()
         }
     }
 
@@ -141,30 +159,13 @@ final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
     /// This can throw an error: callers should use do/try/catch or propagate the error.
     private func listDirectoriesSync(remote: RemoteConfig, path: String, password: String?) throws -> BrowserTransportListResult {
         let timeout = Int32(max(1, Int(listTimeoutSeconds.rounded())))
-
-        let passwordForAuth: String?
-        let privateKeyPathForAuth: String?
-        switch remote.authMode {
-        case .password:
-            guard let password, !password.isEmpty else {
-                throw AppError.remoteBrowserError("Password is required for remote browsing.")
-            }
-            passwordForAuth = password
-            privateKeyPathForAuth = nil
-        case .privateKey:
-            passwordForAuth = nil
-            if let key = remote.privateKeyPath?.trimmingCharacters(in: .whitespacesAndNewlines), !key.isEmpty {
-                privateKeyPathForAuth = key
-            } else {
-                throw AppError.remoteBrowserError("Private key path is required for key-based remote browsing.")
-            }
-        }
+        let credentials = try resolveCredentials(for: remote, password: password)
 
         do {
             let handle = try ensureSessionSync(
                 remote: remote,
-                password: passwordForAuth,
-                privateKeyPath: privateKeyPathForAuth,
+                password: credentials.password,
+                privateKeyPath: credentials.privateKeyPath,
                 timeout: timeout
             )
             return try listWithSessionSync(
@@ -178,8 +179,8 @@ final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
             closeSessionSync(for: remote.id)
             let handle = try ensureSessionSync(
                 remote: remote,
-                password: passwordForAuth,
-                privateKeyPath: privateKeyPathForAuth,
+                password: credentials.password,
+                privateKeyPath: credentials.privateKeyPath,
                 timeout: timeout
             )
             return try listWithSessionSync(
@@ -196,32 +197,39 @@ final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
     /// This can throw an error: callers should use do/try/catch or propagate the error.
     private func pingSync(remote: RemoteConfig, path: String, password: String?) throws {
         let timeout = Int32(max(1, Int(pingTimeoutSeconds.rounded())))
+        let credentials = try resolveCredentials(for: remote, password: password)
 
-        let passwordForAuth: String?
-        let privateKeyPathForAuth: String?
-        switch remote.authMode {
-        case .password:
-            guard let password, !password.isEmpty else {
-                throw AppError.remoteBrowserError("Password is required for remote browsing.")
-            }
-            passwordForAuth = password
-            privateKeyPathForAuth = nil
-        case .privateKey:
-            passwordForAuth = nil
-            if let key = remote.privateKeyPath?.trimmingCharacters(in: .whitespacesAndNewlines), !key.isEmpty {
-                privateKeyPathForAuth = key
-            } else {
-                throw AppError.remoteBrowserError("Private key path is required for key-based remote browsing.")
+        do {
+            let handle = try ensureSessionSync(
+                remote: remote,
+                password: credentials.password,
+                privateKeyPath: credentials.privateKeyPath,
+                timeout: timeout
+            )
+            try pingWithSessionSync(handle: handle, path: path, timeout: timeout)
+        } catch {
+            closeSessionSync(for: remote.id)
+            let handle = try ensureSessionSync(
+                remote: remote,
+                password: credentials.password,
+                privateKeyPath: credentials.privateKeyPath,
+                timeout: timeout
+            )
+            do {
+                try pingWithSessionSync(handle: handle, path: path, timeout: timeout)
+            } catch {
+                closeSessionSync(for: remote.id)
+                throw error
             }
         }
+    }
 
-        let handle = try ensureSessionSync(
-            remote: remote,
-            password: passwordForAuth,
-            privateKeyPath: privateKeyPathForAuth,
-            timeout: timeout
-        )
-
+    private func pingWithSessionSync(
+        handle: UnsafeMutablePointer<macfusegui_libssh2_session_handle>,
+        path: String,
+        timeout: Int32
+    ) throws {
+        assertOnBridgeQueue()
         var errorPtr: UnsafeMutablePointer<CChar>?
         let status = path.withCString { pathPtr in
             macfusegui_libssh2_ping_session(handle, pathPtr, timeout, &errorPtr)
@@ -236,6 +244,25 @@ final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
             let timeoutSeconds = Int(timeout)
             let message = errorPtr.map { String(cString: $0) } ?? "libssh2 keepalive failed with status \(status) after \(timeoutSeconds)s."
             throw AppError.remoteBrowserError(message)
+        }
+    }
+
+    private func resolveCredentials(
+        for remote: RemoteConfig,
+        password: String?
+    ) throws -> (password: String?, privateKeyPath: String?) {
+        switch remote.authMode {
+        case .password:
+            guard let password, !password.isEmpty else {
+                throw AppError.remoteBrowserError("Password is required for remote browsing.")
+            }
+            return (password, nil)
+        case .privateKey:
+            guard let key = remote.privateKeyPath?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !key.isEmpty else {
+                throw AppError.remoteBrowserError("Private key path is required for key-based remote browsing.")
+            }
+            return (nil, key)
         }
     }
 
@@ -277,21 +304,18 @@ final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
             }
         }
 
-        if status != 0 || handle == nil {
+        guard status == 0, let resolved = handle else {
             let timeoutSeconds = Int(timeout)
             let message = errorPtr.map { String(cString: $0) } ?? "Failed to open libssh2 browser session within \(timeoutSeconds)s."
             throw AppError.remoteBrowserError(message)
         }
 
-        sessions[remote.id] = handle
+        sessions[remote.id] = resolved
         diagnostics.append(
             level: .debug,
             category: "remote-browser",
             message: "Opened persistent libssh2 session for \(remote.displayName) (\(remote.id.uuidString))"
         )
-        guard let resolved = handle else {
-            throw AppError.remoteBrowserError("libssh2 session returned success status but no session handle.")
-        }
         return resolved
     }
 
@@ -303,6 +327,7 @@ final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
         timeout: Int32,
         reopenedSession: Bool
     ) throws -> BrowserTransportListResult {
+        assertOnBridgeQueue()
         var cResult = macfusegui_libssh2_list_result()
         let status = path.withCString { pathPtr in
             macfusegui_libssh2_list_directories_with_session(
@@ -341,9 +366,13 @@ final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
         return BrowserTransportListResult(
             resolvedPath: resolvedPath,
             entries: entries,
-            latencyMs: Int(cResult.latency_ms),
+            latencyMs: clampedLatencyMs(cResult.latency_ms),
             reopenedSession: reopenedSession
         )
+    }
+
+    private func clampedLatencyMs(_ value: Int32) -> Int {
+        max(0, min(Int(value), 60_000))
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -401,9 +430,7 @@ final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
             )
         }
 
-        return output.sorted { lhs, rhs in
-            lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
-        }
+        return output
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.

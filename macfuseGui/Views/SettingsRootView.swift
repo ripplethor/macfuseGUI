@@ -9,6 +9,7 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 struct SettingsRootView: View {
@@ -16,6 +17,7 @@ struct SettingsRootView: View {
     let onOpenEditorPlugins: () -> Void
 
     @State private var activeEditorSession: EditorSession?
+    @State private var pendingRemoteDeletion: PendingRemoteDeletion?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -74,10 +76,10 @@ struct SettingsRootView: View {
                         Button("Add") {
                             openEditor(
                                 with: RemoteDraft(
-                                port: 22,
-                                authMode: .privateKey,
-                                remoteDirectory: "/"
-                            )
+                                    port: 22,
+                                    authMode: .privateKey,
+                                    remoteDirectory: "/"
+                                )
                             )
                         }
                     }
@@ -87,7 +89,7 @@ struct SettingsRootView: View {
                         remotes: viewModel.remotes,
                         statuses: viewModel.statuses,
                         badgeStateForRemote: { remoteID in
-                            viewModel.statusBadgeRawValue(for: remoteID)
+                            viewModel.statusBadgeState(for: remoteID)
                         },
                         selectedRemoteID: $viewModel.selectedRemoteID,
                         onConnect: { id in
@@ -116,8 +118,27 @@ struct SettingsRootView: View {
                 }
             }
         }
+        .alert(
+            "Delete Remote?",
+            isPresented: pendingRemoteDeletionPresentedBinding,
+            presenting: pendingRemoteDeletion
+        ) { deletion in
+            Button("Delete", role: .destructive) {
+                viewModel.deleteRemote(deletion.id)
+                if viewModel.selectedRemoteID == deletion.id {
+                    viewModel.selectedRemoteID = nil
+                }
+                pendingRemoteDeletion = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingRemoteDeletion = nil
+            }
+        } message: { deletion in
+            Text("Delete '\(deletion.displayName)'? This removes saved settings and stored credentials.")
+        }
         .onReceive(NotificationCenter.default.publisher(for: .forceQuitRequested)) { _ in
             activeEditorSession = nil
+            pendingRemoteDeletion = nil
         }
         .onAppear {
             viewModel.refreshLaunchAtLoginState()
@@ -134,7 +155,7 @@ struct SettingsRootView: View {
                     Text(remote.displayName)
                         .font(.title2)
                         .fontWeight(.semibold)
-                    StatusBadgeView(stateRawValue: viewModel.statusBadgeRawValue(for: remote.id))
+                    StatusBadgeView(state: viewModel.statusBadgeState(for: remote.id))
                     Spacer()
                 }
 
@@ -177,8 +198,13 @@ struct SettingsRootView: View {
                     }
 
                     Button("Delete") {
-                        viewModel.deleteRemote(remote.id)
+                        pendingRemoteDeletion = PendingRemoteDeletion(
+                            id: remote.id,
+                            displayName: remote.displayName
+                        )
                     }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
                     .foregroundStyle(.red)
 
                     Button("Refresh") {
@@ -220,9 +246,7 @@ struct SettingsRootView: View {
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func shortError(_ message: String) -> String {
         let collapsed = message
-            .replacingOccurrences(of: "\n", with: " ")
-            .replacingOccurrences(of: "\t", with: " ")
-            .replacingOccurrences(of: "  ", with: " ")
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         if collapsed.count <= 220 {
@@ -246,13 +270,17 @@ struct SettingsRootView: View {
         }
 
         var index = 2
-        while true {
+        let maxIndex = max(existingNames.count + 100, 500)
+        while index <= maxIndex {
             let candidate = "\(copyBase) \(index)"
             if !existingNames.contains(candidate.lowercased()) {
                 return candidate
             }
             index += 1
         }
+
+        let fallbackSuffix = String(UUID().uuidString.prefix(8)).lowercased()
+        return "\(copyBase) \(fallbackSuffix)"
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -271,14 +299,32 @@ struct SettingsRootView: View {
         )
     }
 
+    private var pendingRemoteDeletionPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { pendingRemoteDeletion != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingRemoteDeletion = nil
+                }
+            }
+        )
+    }
+
     /// Beginner note: This type groups related state and behavior for one part of the app.
     /// Read stored properties first, then follow methods top-to-bottom to understand flow.
     private struct EditorSession: Identifiable {
         let id = UUID()
         let draft: RemoteDraft
     }
+
+    /// Beginner note: This type tracks destructive-delete confirmation context.
+    private struct PendingRemoteDeletion: Identifiable {
+        let id: UUID
+        let displayName: String
+    }
 }
 
+@MainActor
 /// Beginner note: Dedicated window content for managing editor plugins.
 struct EditorPluginSettingsView: View {
     @ObservedObject var editorPluginRegistry: EditorPluginRegistry
@@ -661,7 +707,7 @@ struct EditorPluginSettingsView: View {
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(editorPluginRegistry.loadIssues.enumerated()), id: \.offset) { _, issue in
+                    ForEach(editorPluginRegistry.loadIssues, id: \.self) { issue in
                         Text("• [\(issue.file)] \(issue.reason)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -757,7 +803,7 @@ struct EditorPluginSettingsView: View {
                         .help(plugin.isActive ? "Set as preferred editor" : "Enable plugin to set as preferred")
                     }
 
-                    Toggle("", isOn: pluginActiveBinding(pluginID: plugin.id))
+                    Toggle("", isOn: pluginActiveBinding(for: plugin))
                         .toggleStyle(.switch)
                         .labelsHidden()
                 }
@@ -875,13 +921,13 @@ struct EditorPluginSettingsView: View {
         )
     }
 
-    private func pluginActiveBinding(pluginID: String) -> Binding<Bool> {
+    private func pluginActiveBinding(for plugin: EditorPluginDefinition) -> Binding<Bool> {
         Binding(
             get: {
-                editorPluginRegistry.plugin(id: pluginID)?.isActive ?? false
+                plugin.isActive
             },
             set: { active in
-                editorPluginRegistry.setPluginActive(active, pluginID: pluginID)
+                editorPluginRegistry.setPluginActive(active, pluginID: plugin.id)
             }
         )
     }
@@ -892,10 +938,13 @@ struct EditorPluginSettingsView: View {
     }
 
     private func reloadCatalogAndRefreshSelection() {
+        let hadUnsavedChanges = manifestEditorHasChanges
         editorPluginRegistry.reloadCatalog()
         ensurePluginSelection()
         pluginActionError = nil
-        pluginActionStatus = "Plugin catalog reloaded."
+        pluginActionStatus = hadUnsavedChanges
+            ? "Plugin catalog reloaded. Unsaved JSON edits were kept."
+            : "Plugin catalog reloaded."
     }
 
     private func createNewPluginJSON() {
@@ -904,7 +953,12 @@ struct EditorPluginSettingsView: View {
             pluginActionError = nil
             pluginActionStatus = "Created \(fileURL.lastPathComponent)."
             editorPluginRegistry.reloadCatalog()
-            selectPlugin(fileURL.deletingPathExtension().lastPathComponent)
+            if let createdPluginID = pluginIDForManifestURL(fileURL) {
+                selectPlugin(createdPluginID)
+            } else {
+                ensurePluginSelection()
+                pluginActionError = "Created plugin file but could not auto-select it. Choose it from the list."
+            }
         } catch {
             pluginActionError = "Failed to create plugin JSON: \(error.localizedDescription)"
             pluginActionStatus = nil
@@ -947,6 +1001,10 @@ struct EditorPluginSettingsView: View {
         }
 
         if let selectedPluginID, editorPluginRegistry.plugin(id: selectedPluginID) != nil {
+            if manifestEditorHasChanges {
+                pluginActionStatus = "Unsaved JSON edits were kept. Use Reload File to discard changes."
+                return
+            }
             loadSelectedPluginManifest()
             return
         }
@@ -960,6 +1018,19 @@ struct EditorPluginSettingsView: View {
         if let firstID = editorPluginRegistry.plugins.first?.id {
             selectPlugin(firstID)
         }
+    }
+
+    private func pluginIDForManifestURL(_ manifestURL: URL) -> String? {
+        let targetPath = manifestURL.standardizedFileURL.path
+        for plugin in editorPluginRegistry.plugins where plugin.source == .external {
+            guard let candidateURL = editorPluginRegistry.manifestFileURL(for: plugin.id) else {
+                continue
+            }
+            if candidateURL.standardizedFileURL.path == targetPath {
+                return plugin.id
+            }
+        }
+        return nil
     }
 
     private func selectPlugin(_ pluginID: String) {

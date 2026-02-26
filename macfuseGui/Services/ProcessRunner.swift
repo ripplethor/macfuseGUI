@@ -24,6 +24,8 @@ struct ProcessResult: Sendable {
 /// Beginner note: This protocol defines the minimum process execution behavior used by services.
 /// Using a protocol lets tests inject a fake runner without launching real system processes.
 protocol ProcessRunning {
+    /// Environment merge semantics: implementation starts from the current process
+    /// environment and then applies `environment` values as overrides by key.
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This is async and throwing: callers must await it and handle failures.
     func run(
@@ -65,8 +67,13 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
     }
 
     private let processRegistryLock = NSLock()
+    private let terminationQueue = DispatchQueue(
+        label: "com.visualweb.macfusegui.processrunner.termination",
+        qos: .userInitiated
+    )
     private var runningPIDs: [UUID: ProcessHandle] = [:]
     private var pendingCancellations: Set<UUID> = []
+    private var terminatingCommands: Set<UUID> = []
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     func run(
@@ -85,7 +92,7 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                         let process = Process()
                         let stdoutPipe = Pipe()
                         let stderrPipe = Pipe()
-                        let stdinPipe = Pipe()
+                        var stdinPipe: Pipe?
                         process.executableURL = URL(fileURLWithPath: executable)
                         process.arguments = arguments
                         var mergedEnvironment = ProcessInfo.processInfo.environment
@@ -94,7 +101,9 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                         process.standardOutput = stdoutPipe
                         process.standardError = stderrPipe
                         if standardInput != nil {
-                            process.standardInput = stdinPipe
+                            let pipe = Pipe()
+                            stdinPipe = pipe
+                            process.standardInput = pipe
                         }
 
                         var didTimeout = false
@@ -107,24 +116,13 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                         var drained = false
 
                         /// Beginner note: This method is one step in the feature workflow for this file.
-                        func appendOutput(_ chunk: Data, toStdout: Bool) {
+                        func appendBytes(_ chunk: Data, toStdout: Bool, respectCaptureState: Bool) {
                             guard !chunk.isEmpty else { return }
                             captureLock.lock()
                             defer { captureLock.unlock() }
-                            guard captureActive else { return }
-                            if toStdout {
-                                stdoutData.append(chunk)
-                            } else {
-                                stderrData.append(chunk)
+                            if respectCaptureState, !captureActive {
+                                return
                             }
-                        }
-
-                        /// Beginner note: This method appends tail output after handlers are stopped.
-                        /// It intentionally bypasses `captureActive` so timeout teardown can still keep late bytes.
-                        func appendTailOutput(_ chunk: Data, toStdout: Bool) {
-                            guard !chunk.isEmpty else { return }
-                            captureLock.lock()
-                            defer { captureLock.unlock() }
                             if toStdout {
                                 stdoutData.append(chunk)
                             } else {
@@ -133,15 +131,15 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                         }
 
                         /// Beginner note: This method is one step in the feature workflow for this file.
-                        func stopCaptureHandlers() {
+                        func deactivateCapture() {
                             captureLock.lock()
-                            if !captureActive {
-                                captureLock.unlock()
-                                return
-                            }
                             captureActive = false
                             captureLock.unlock()
+                        }
 
+                        /// Beginner note: This method is one step in the feature workflow for this file.
+                        func stopCaptureHandlers() {
+                            deactivateCapture()
                             stdoutPipe.fileHandleForReading.readabilityHandler = nil
                             stderrPipe.fileHandleForReading.readabilityHandler = nil
                         }
@@ -175,7 +173,8 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                                     let bytesRead = Darwin.read(fd, &buffer, buffer.count)
                                     if bytesRead > 0 {
                                         let chunk = Data(buffer[0..<Int(bytesRead)])
-                                        appendTailOutput(chunk, toStdout: toStdout)
+                                        // Tail drain intentionally bypasses capture state so teardown keeps late bytes.
+                                        appendBytes(chunk, toStdout: toStdout, respectCaptureState: false)
                                         continue
                                     }
                                     if bytesRead == 0 {
@@ -197,12 +196,12 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
 
                         stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
                             let chunk = handle.availableData
-                            appendOutput(chunk, toStdout: true)
+                            appendBytes(chunk, toStdout: true, respectCaptureState: true)
                         }
 
                         stderrPipe.fileHandleForReading.readabilityHandler = { handle in
                             let chunk = handle.availableData
-                            appendOutput(chunk, toStdout: false)
+                            appendBytes(chunk, toStdout: false, respectCaptureState: true)
                         }
 
                         process.terminationHandler = { _ in
@@ -211,6 +210,8 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
 
                         try process.run()
                         let pid = process.processIdentifier
+                        // Best effort only: Process does not provide pre-exec hooks to set process group
+                        // before exec, so group assignment can race for very short-lived children.
                         var processGroupID: Int32?
                         if setpgid(pid, pid) == 0 {
                             processGroupID = pid
@@ -221,7 +222,9 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                             processGroupID: processGroupID
                         )
 
-                        if let standardInput, let inputData = standardInput.data(using: .utf8) {
+                        if let standardInput,
+                           let inputData = standardInput.data(using: .utf8),
+                           let stdinPipe {
                             stdinPipe.fileHandleForWriting.write(inputData)
                             try? stdinPipe.fileHandleForWriting.close()
                         }
@@ -230,32 +233,33 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                         if waitResult == .timedOut {
                             didTimeout = true
 
-                            // Stop handlers before termination to avoid late appends during shutdown.
-                            stopCaptureHandlers()
+                            // Stop accepting handler appends before teardown; handlers are removed at final cleanup.
+                            deactivateCapture()
+                            let timeoutHandle = self.beginTermination(
+                                commandID: commandID,
+                                fallback: ProcessHandle(pid: pid, processGroupID: processGroupID)
+                            )
 
-                            if process.isRunning {
-                                if let processGroupID, processGroupID > 1 {
-                                    _ = kill(-processGroupID, SIGTERM)
+                            if process.isRunning, let timeoutHandle {
+                                self.sendTerminateSignal(to: timeoutHandle)
+                                if timeoutHandle.pid == process.processIdentifier {
+                                    process.terminate()
                                 }
-                                process.terminate()
                             }
 
                             // Keep timeout teardown short so caller-level watchdog budgets stay meaningful.
                             let graceResult = terminationSemaphore.wait(timeout: .now() + 0.6)
-                            if graceResult == .timedOut, process.isRunning {
-                                if let processGroupID, processGroupID > 1 {
-                                    _ = kill(-processGroupID, SIGKILL)
+                            if graceResult == .timedOut, process.isRunning, let timeoutHandle {
+                                self.sendKillSignal(to: timeoutHandle)
+                                if timeoutHandle.pid == process.processIdentifier {
+                                    _ = kill(process.processIdentifier, SIGKILL)
                                 }
-                                _ = kill(process.processIdentifier, SIGKILL)
                                 _ = terminationSemaphore.wait(timeout: .now() + 0.6)
                             }
                         }
 
                         stopCaptureHandlers()
-
-                        if !process.isRunning {
-                            drainRemainingOutputOnceNonBlocking()
-                        }
+                        drainRemainingOutputOnceNonBlocking()
 
                         captureLock.lock()
                         let finalStdout = stdoutData
@@ -292,10 +296,16 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
         processRegistryLock.lock()
         runningPIDs[commandID] = ProcessHandle(pid: pid, processGroupID: processGroupID)
         let cancelImmediately = pendingCancellations.remove(commandID) != nil
+        if cancelImmediately {
+            terminatingCommands.insert(commandID)
+        }
         processRegistryLock.unlock()
 
         if cancelImmediately {
-            terminateProcess(ProcessHandle(pid: pid, processGroupID: processGroupID))
+            let handle = ProcessHandle(pid: pid, processGroupID: processGroupID)
+            terminationQueue.async { [weak self] in
+                self?.terminateProcess(handle)
+            }
         }
     }
 
@@ -303,21 +313,47 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
         processRegistryLock.lock()
         runningPIDs.removeValue(forKey: commandID)
         pendingCancellations.remove(commandID)
+        terminatingCommands.remove(commandID)
         processRegistryLock.unlock()
     }
 
     private func cancelRunningProcess(commandID: UUID) {
+        let handleToTerminate: ProcessHandle?
         processRegistryLock.lock()
         if let processHandle = runningPIDs[commandID] {
-            processRegistryLock.unlock()
-            terminateProcess(processHandle)
-            return
+            if terminatingCommands.contains(commandID) {
+                handleToTerminate = nil
+            } else {
+                terminatingCommands.insert(commandID)
+                handleToTerminate = processHandle
+            }
+        } else {
+            pendingCancellations.insert(commandID)
+            handleToTerminate = nil
         }
-        pendingCancellations.insert(commandID)
         processRegistryLock.unlock()
+
+        if let handleToTerminate {
+            terminationQueue.async { [weak self] in
+                self?.terminateProcess(handleToTerminate)
+            }
+        }
     }
 
-    private func terminateProcess(_ handle: ProcessHandle) {
+    private func beginTermination(commandID: UUID, fallback: ProcessHandle? = nil) -> ProcessHandle? {
+        processRegistryLock.lock()
+        defer { processRegistryLock.unlock() }
+        if terminatingCommands.contains(commandID) {
+            return nil
+        }
+        terminatingCommands.insert(commandID)
+        if let active = runningPIDs[commandID] {
+            return active
+        }
+        return fallback
+    }
+
+    private func sendTerminateSignal(to handle: ProcessHandle) {
         guard handle.pid > 1 else {
             return
         }
@@ -325,12 +361,24 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
             _ = kill(-processGroupID, SIGTERM)
         }
         _ = kill(handle.pid, SIGTERM)
-        // By design this is a short blocking grace period in a termination-only path.
-        // It gives child processes a chance to exit cleanly before escalating to SIGKILL.
-        usleep(250_000)
+    }
+
+    private func sendKillSignal(to handle: ProcessHandle) {
+        guard handle.pid > 1 else {
+            return
+        }
         if let processGroupID = handle.processGroupID, processGroupID > 1 {
             _ = kill(-processGroupID, SIGKILL)
         }
         _ = kill(handle.pid, SIGKILL)
+    }
+
+    private func terminateProcess(_ handle: ProcessHandle) {
+        sendTerminateSignal(to: handle)
+        // By design this is a short blocking grace period in a termination-only path.
+        // It gives child processes a chance to exit cleanly before escalating to SIGKILL.
+        // This runs on a dedicated queue so cancellation handlers never block cooperative threads.
+        usleep(250_000)
+        sendKillSignal(to: handle)
     }
 }

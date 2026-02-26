@@ -88,4 +88,54 @@ final class RemoteStoreTests: XCTestCase {
         XCTAssertEqual(loaded[0].favoriteRemoteDirectories, [])
         XCTAssertEqual(loaded[0].recentRemoteDirectories, [])
     }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    /// This can throw an error: callers should use do/try/catch or propagate the error.
+    func testLoadCorruptJSONSurfacesCorruptFileError() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("macfusegui-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let storeURL = tempDir.appendingPathComponent("remotes.json")
+        let store = JSONRemoteStore(storageURL: storeURL)
+        try "{ not valid json".write(to: storeURL, atomically: true, encoding: .utf8)
+
+        XCTAssertThrowsError(try store.load()) { error in
+            guard let appError = error as? AppError else {
+                XCTFail("Expected AppError, got \(type(of: error))")
+                return
+            }
+            switch appError {
+            case .persistenceError(let message):
+                XCTAssertTrue(message.contains("Corrupt remotes file"))
+            default:
+                XCTFail("Expected persistenceError, got \(appError)")
+            }
+        }
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    /// This can throw an error: callers should use do/try/catch or propagate the error.
+    func testDeleteMissingRemoteThrowsNotFound() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("macfusegui-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let storeURL = tempDir.appendingPathComponent("remotes.json")
+        let store = JSONRemoteStore(storageURL: storeURL)
+        try store.save([])
+
+        XCTAssertThrowsError(try store.delete(id: UUID())) { error in
+            guard let appError = error as? AppError else {
+                XCTFail("Expected AppError, got \(type(of: error))")
+                return
+            }
+            switch appError {
+            case .persistenceError(let message):
+                XCTAssertTrue(message.contains("was not found"))
+            default:
+                XCTFail("Expected persistenceError, got \(appError)")
+            }
+        }
+    }
 }

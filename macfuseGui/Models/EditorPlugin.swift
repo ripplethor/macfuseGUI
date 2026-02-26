@@ -115,7 +115,7 @@ struct EditorPluginDefinition: Identifiable, Codable, Equatable, Sendable {
 
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
-struct EditorPluginLoadIssue: Codable, Equatable, Sendable {
+struct EditorPluginLoadIssue: Codable, Equatable, Hashable, Sendable {
     var file: String
     var reason: String
 

@@ -46,13 +46,20 @@ final class RemoteBrowserViewModel: ObservableObject {
     // Published values drive SwiftUI updates.
     @Published private(set) var viewState: BrowserViewState = .idle
     @Published private(set) var currentPath: String
-    @Published private(set) var entries: [RemoteDirectoryItem] = []
+    @Published private(set) var entries: [RemoteDirectoryItem] = [] {
+        didSet { rebuildVisibleEntries() }
+    }
     @Published private(set) var health: BrowserConnectionHealth = .connecting
     @Published private(set) var isStale: Bool = false
     @Published private(set) var isConfirmedEmpty: Bool = false
     @Published private(set) var statusMessage: String?
-    @Published var searchText: String = ""
-    @Published var sortMode: BrowserSortMode = .name
+    @Published var searchText: String = "" {
+        didSet { rebuildVisibleEntries() }
+    }
+    @Published var sortMode: BrowserSortMode = .name {
+        didSet { rebuildVisibleEntries() }
+    }
+    @Published private(set) var visibleEntries: [RemoteDirectoryItem] = []
     @Published var selectedItemID: RemoteDirectoryItem.ID?
     @Published private(set) var favorites: [String]
     @Published private(set) var recents: [String]
@@ -87,43 +94,17 @@ final class RemoteBrowserViewModel: ObservableObject {
             initialRecents,
             limit: RemotesViewModel.recentsLimit
         )
-        self.username = username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "user" : username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.username = trimmedUsername.isEmpty ? "user" : trimmedUsername
         self.remotesViewModel = remotesViewModel
         self.onPathMemoryChanged = onPathMemoryChanged
+        rebuildVisibleEntries()
     }
 
     /// Beginner note: Deinitializer runs during teardown to stop background work and free resources.
     deinit {
         healthTask?.cancel()
         degradedRefreshTask?.cancel()
-    }
-
-    var visibleEntries: [RemoteDirectoryItem] {
-        let filtered = entries.filter { entry in
-            searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-            entry.name.localizedCaseInsensitiveContains(searchText)
-        }
-
-        switch sortMode {
-        case .name:
-            return filtered.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        case .modified:
-            return filtered.sorted { lhs, rhs in
-                switch (lhs.modifiedAt, rhs.modifiedAt) {
-                case let (l?, r?):
-                    if l == r {
-                        return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
-                    }
-                    return l > r
-                case (_?, nil):
-                    return true
-                case (nil, _?):
-                    return false
-                case (nil, nil):
-                    return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
-                }
-            }
-        }
     }
 
     var breadcrumbs: [RemotePathBreadcrumb] {
@@ -219,6 +200,10 @@ final class RemoteBrowserViewModel: ObservableObject {
         health.state == .healthy && isConfirmedEmpty && visibleEntries.isEmpty
     }
 
+    var shouldShowDegradedNoDataState: Bool {
+        (viewState == .recovering || viewState == .degradedWithCache || viewState == .fatal) && !hasVisibleData
+    }
+
     var canRetryNow: Bool {
         health.state == .degraded || health.state == .reconnecting || health.state == .failed || viewState == .degradedWithCache || viewState == .recovering
     }
@@ -273,8 +258,8 @@ final class RemoteBrowserViewModel: ObservableObject {
             currentPath: currentPath,
             requestID: requestID
         )
-        requestInFlight = false
         apply(snapshot: snapshot, reason: "up")
+        requestInFlight = false
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -349,9 +334,9 @@ final class RemoteBrowserViewModel: ObservableObject {
             path: normalized,
             requestID: requestID
         )
-        requestInFlight = false
         // apply(...) enforces request-ordering and state transitions in one place.
         apply(snapshot: snapshot, reason: reason)
+        requestInFlight = false
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -366,19 +351,19 @@ final class RemoteBrowserViewModel: ObservableObject {
         requestInFlight = true
         let snapshot = await remotesViewModel.retryCurrentBrowserPath(
             sessionID: sessionID,
+            lastKnownPath: currentPath,
             requestID: requestID
         )
-        requestInFlight = false
         apply(snapshot: snapshot, reason: reason)
+        requestInFlight = false
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func apply(snapshot: RemoteBrowserSnapshot, reason: String) {
-        // Ignore older snapshot responses if a newer request already started.
-        guard snapshot.requestID >= latestRequestID else {
+        // Only accept the exact in-flight request response.
+        guard snapshot.requestID == latestRequestID else {
             return
         }
-        latestRequestID = snapshot.requestID
 
         currentPath = BrowserPathNormalizer.normalize(path: snapshot.path)
         health = snapshot.health
@@ -386,7 +371,8 @@ final class RemoteBrowserViewModel: ObservableObject {
         isConfirmedEmpty = snapshot.isConfirmedEmpty
         statusMessage = snapshot.message
 
-        let directoryEntries = snapshot.entries.filter(\.isDirectory)
+        assert(snapshot.entries.allSatisfy(\.isDirectory), "Browser snapshots are expected to be directories-only.")
+        let directoryEntries = snapshot.entries
         if !directoryEntries.isEmpty {
             entries = directoryEntries
         } else if snapshot.isConfirmedEmpty && !snapshot.isStale {
@@ -435,25 +421,50 @@ final class RemoteBrowserViewModel: ObservableObject {
         persistPathMemory()
     }
 
+    private func rebuildVisibleEntries() {
+        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filtered = entries.filter { entry in
+            trimmedSearch.isEmpty || entry.name.localizedCaseInsensitiveContains(trimmedSearch)
+        }
+
+        switch sortMode {
+        case .name:
+            visibleEntries = filtered.sorted {
+                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+        case .modified:
+            visibleEntries = filtered.sorted { lhs, rhs in
+                switch (lhs.modifiedAt, rhs.modifiedAt) {
+                case let (l?, r?):
+                    if l == r {
+                        return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                    }
+                    return l > r
+                case (_?, nil):
+                    return true
+                case (nil, _?):
+                    return false
+                case (nil, nil):
+                    return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                }
+            }
+        }
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func startHealthLoop() {
         healthTask?.cancel()
-        healthTask = Task { [weak self] in
-            guard let self else {
-                return
-            }
+        healthTask = Task {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 if Task.isCancelled {
                     break
                 }
                 let latest = await remotesViewModel.browserHealth(sessionID: sessionID)
-                await MainActor.run {
-                    self.health = latest
-                    // If backend moved to reconnecting while UI looked ready, reflect it.
-                    if latest.state == .reconnecting && self.viewState == .ready {
-                        self.viewState = .recovering
-                    }
+                health = latest
+                // If backend moved to reconnecting while UI looked ready, reflect it.
+                if latest.state == .reconnecting && viewState == .ready {
+                    viewState = .recovering
                 }
             }
         }
@@ -462,33 +473,26 @@ final class RemoteBrowserViewModel: ObservableObject {
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func startDegradedRefreshLoop() {
         degradedRefreshTask?.cancel()
-        degradedRefreshTask = Task { [weak self] in
-            guard let self else {
-                return
-            }
-
+        degradedRefreshTask = Task {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 2_500_000_000)
                 if Task.isCancelled {
                     break
                 }
 
-                let shouldRetry = await MainActor.run {
-                    self.health.state != .healthy && self.health.state != .closed
-                }
+                let shouldRetry = health.state != .healthy && health.state != .closed
                 guard shouldRetry else {
                     continue
                 }
 
                 // Automatic retry while degraded avoids requiring constant user refresh clicks.
-                await self.retryCurrentPath(reason: "auto-retry")
+                await retryCurrentPath(reason: "auto-retry")
             }
         }
     }
 
     private static let statusDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateStyle = .short
         formatter.timeStyle = .medium
         return formatter

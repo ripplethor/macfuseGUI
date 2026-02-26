@@ -8,6 +8,10 @@ set -euo pipefail
 # Build both arch apps: ARCH_OVERRIDE=both CONFIGURATION=Release ./scripts/build.sh
 # Build x86_64 app only: ARCH_OVERRIDE=x86_64 CONFIGURATION=Debug ./scripts/build.sh
 # Dry-run dual-arch release: ARCH_OVERRIDE=both ./scripts/release.sh --dry-run
+#
+# DerivedData cleanup:
+# - By default, this script removes build/DerivedData* after a successful build.
+# - Set CLEAN_DERIVED_DATA=0 to keep DerivedData for debugging/incremental investigation.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_PATH="$ROOT_DIR/macfuseGui.xcodeproj"
@@ -16,10 +20,22 @@ CONFIGURATION="${CONFIGURATION:-Debug}"
 ARCH_OVERRIDE="${ARCH_OVERRIDE:-arm64}"
 CODE_SIGNING_ALLOWED="${CODE_SIGNING_ALLOWED:-NO}"
 STRIP_RELEASE_BINARY="${STRIP_RELEASE_BINARY:-1}"
+CLEAN_DERIVED_DATA="${CLEAN_DERIVED_DATA:-1}"
 APP_MARKETING_VERSION="${APP_MARKETING_VERSION:-}"
 APP_BUILD_VERSION="${APP_BUILD_VERSION:-}"
 OUTPUT_DIR="$ROOT_DIR/build"
-DEFAULT_OUTPUT_APP="$OUTPUT_DIR/macfuseGui.app"
+APP_BUNDLE_NAME="${APP_BUNDLE_NAME:-${SCHEME}.app}"
+APP_BUNDLE_BASENAME="${APP_BUNDLE_NAME%.app}"
+DEFAULT_OUTPUT_APP="$OUTPUT_DIR/$APP_BUNDLE_NAME"
+VERSION_FILE="$ROOT_DIR/VERSION"
+VERSION_LIB="$ROOT_DIR/scripts/lib/version.sh"
+
+[[ -f "$VERSION_LIB" ]] || {
+  echo "Missing version helpers: $VERSION_LIB" >&2
+  exit 1
+}
+# shellcheck source=scripts/lib/version.sh
+source "$VERSION_LIB"
 
 normalize_arch() {
   case "$1" in
@@ -34,12 +50,56 @@ normalize_arch() {
   esac
 }
 
-is_valid_semver() {
-  [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-}
-
 is_valid_build_version() {
   [[ "$1" =~ ^[0-9]+([.][0-9]+){0,2}$ ]]
+}
+
+resolve_marketing_version_from_repo() {
+  if command -v git >/dev/null 2>&1; then
+    local version_from_tag=""
+    # Uses local tags only; run `git fetch --tags origin` first if tags may be stale.
+    version_from_tag="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null | sed 's/^v//' | sort -V | tail -n 1 || true)"
+    if [[ -n "$version_from_tag" ]]; then
+      is_valid_semver "$version_from_tag" || {
+        echo "Invalid local tag version: $version_from_tag (expected X.Y.Z)" >&2
+        exit 1
+      }
+      echo "$version_from_tag"
+      return
+    fi
+  fi
+
+  local version_from_file=""
+  if [[ -f "$VERSION_FILE" ]]; then
+    version_from_file="$(tr -d '[:space:]' < "$VERSION_FILE" || true)"
+    if [[ -n "$version_from_file" ]]; then
+      is_valid_semver "$version_from_file" || {
+        echo "Invalid VERSION file value: $version_from_file (expected X.Y.Z)" >&2
+        exit 1
+      }
+      echo "$version_from_file"
+      return
+    fi
+  fi
+
+  echo ""
+}
+
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || {
+    echo "Missing required command: $1" >&2
+    exit 1
+  }
+}
+
+cleanup_derived_data_dirs() {
+  local derived_data_paths=("$ROOT_DIR"/build/DerivedData*)
+  if [[ ! -e "${derived_data_paths[0]}" ]]; then
+    return
+  fi
+
+  rm -rf "${derived_data_paths[@]}"
+  echo "Removed temporary DerivedData directories under: $ROOT_DIR/build"
 }
 
 resolve_bundle_executable_name() {
@@ -121,6 +181,8 @@ strip_app_executable_if_enabled() {
     exit 1
   }
 
+  # Strip before sign: safe here because unsigned build paths use CODE_SIGNING_ALLOWED=NO.
+  # Signed builds skip this step entirely (see guard above).
   local strip_output=""
   if ! strip_output="$(strip -Sx "$executable_path" 2>&1)"; then
     echo "Warning: strip failed for $app_bundle; continuing with unstripped binary."
@@ -146,6 +208,7 @@ run_xcodebuild_for_arch() {
   local arch="$1"
   shift
 
+  # Requires Rosetta 2 on Apple Silicon for x86_64 builds.
   if [[ "$arch" == "x86_64" && "$(uname -m)" == "arm64" ]]; then
     arch -x86_64 xcodebuild "$@"
   else
@@ -230,7 +293,7 @@ build_single_variant() {
 
   run_xcodebuild_for_arch "$build_arch" "${xcodebuild_args[@]}"
 
-  product_app="$derived_data/Build/Products/$CONFIGURATION/macfuseGui.app"
+  product_app="$derived_data/Build/Products/$CONFIGURATION/$APP_BUNDLE_NAME"
   if [[ ! -d "$product_app" ]]; then
     echo "Build succeeded but app bundle not found at: $product_app" >&2
     exit 1
@@ -246,7 +309,33 @@ build_single_variant() {
 
 ARCH_OVERRIDE="$(normalize_arch "$ARCH_OVERRIDE")"
 
+for cmd in xcodebuild codesign ditto lipo strip stat awk sed sort tail find xargs; do
+  require_cmd "$cmd"
+done
+[[ -x /usr/libexec/PlistBuddy ]] || {
+  echo "Missing required command: /usr/libexec/PlistBuddy" >&2
+  exit 1
+}
+
+build_started_at="$(date)"
+build_started_epoch="$(date +%s)"
+echo "Build started: $build_started_at"
+
+if [[ -z "$APP_MARKETING_VERSION" ]]; then
+  APP_MARKETING_VERSION="$(resolve_marketing_version_from_repo)"
+fi
+if [[ -n "$APP_MARKETING_VERSION" && -z "$APP_BUILD_VERSION" ]]; then
+  APP_BUILD_VERSION="$(semver_to_build_number "$APP_MARKETING_VERSION")"
+fi
+
 mkdir -p "$OUTPUT_DIR"
+
+if [[ -n "$APP_MARKETING_VERSION" ]]; then
+  echo "Using app version: $APP_MARKETING_VERSION"
+fi
+if [[ -n "$APP_BUILD_VERSION" ]]; then
+  echo "Using build number: $APP_BUILD_VERSION"
+fi
 
 case "$ARCH_OVERRIDE" in
   arm64)
@@ -259,11 +348,22 @@ case "$ARCH_OVERRIDE" in
     build_single_variant "universal" "$DEFAULT_OUTPUT_APP" "$ROOT_DIR/build/DerivedData-universal" "universal"
     ;;
   both)
-    build_single_variant "arm64" "$OUTPUT_DIR/macfuseGui-arm64.app" "$ROOT_DIR/build/DerivedData-arm64" "arm64"
-    build_single_variant "x86_64" "$OUTPUT_DIR/macfuseGui-x86_64.app" "$ROOT_DIR/build/DerivedData-x86_64" "x86_64"
+    rm -rf "$OUTPUT_DIR/$APP_BUNDLE_BASENAME-arm64.app" "$OUTPUT_DIR/$APP_BUNDLE_BASENAME-x86_64.app"
+    # Note: both builds are intentionally sequential. sync_legacy_third_party_paths
+    # rewrites shared compatibility symlinks and would race in parallel.
+    build_single_variant "arm64" "$OUTPUT_DIR/$APP_BUNDLE_BASENAME-arm64.app" "$ROOT_DIR/build/DerivedData-arm64" "arm64"
+    build_single_variant "x86_64" "$OUTPUT_DIR/$APP_BUNDLE_BASENAME-x86_64.app" "$ROOT_DIR/build/DerivedData-x86_64" "x86_64"
     ;;
   *)
     echo "Unsupported ARCH_OVERRIDE value: $ARCH_OVERRIDE" >&2
     exit 1
     ;;
 esac
+
+build_finished_at="$(date)"
+build_finished_epoch="$(date +%s)"
+echo "Build finished: $build_finished_at (elapsed $((build_finished_epoch - build_started_epoch))s)"
+
+if [[ "$CLEAN_DERIVED_DATA" == "1" ]]; then
+  cleanup_derived_data_dirs
+fi

@@ -21,8 +21,8 @@ final class RemoteDirectoryBrowserService {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
-    /// This is async and throwing: callers must await it and handle failures.
-    func openSession(remote: RemoteConfig, password: String?) async throws -> RemoteBrowserSessionID {
+    /// This is async: it can suspend and resume later without blocking a thread.
+    func openSession(remote: RemoteConfig, password: String?) async -> RemoteBrowserSessionID {
         let sessionID = await manager.openSession(remote: remote, password: password)
         return sessionID
     }
@@ -54,8 +54,16 @@ final class RemoteDirectoryBrowserService {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This is async: it can suspend and resume later without blocking a thread.
-    func retryCurrentPath(sessionID: RemoteBrowserSessionID, requestID: UInt64) async -> RemoteBrowserSnapshot {
-        await manager.retryCurrentPath(sessionID: sessionID, requestID: requestID)
+    func retryCurrentPath(
+        sessionID: RemoteBrowserSessionID,
+        lastKnownPath: String,
+        requestID: UInt64
+    ) async -> RemoteBrowserSnapshot {
+        await manager.retryCurrentPath(
+            sessionID: sessionID,
+            lastKnownPath: lastKnownPath,
+            requestID: requestID
+        )
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -71,21 +79,23 @@ final class RemoteDirectoryBrowserService {
     }
 
     // Compatibility adapter used during migration.
+    @available(*, deprecated, message: "Use session-based APIs directly.")
     /// Beginner note: This method is one step in the feature workflow for this file.
-    /// This is async and throwing: callers must await it and handle failures.
-    func listDirectories(remote: RemoteConfig, basePath: String, password: String?) async throws -> [RemoteDirectoryEntry] {
-        let sessionID = try await openSession(remote: remote, password: password)
-        defer {
-            Task { await closeSession(sessionID) }
-        }
-        let snapshot = await listDirectories(sessionID: sessionID, path: basePath, requestID: 1)
+    /// This is async: it can suspend and resume later without blocking a thread.
+    func listDirectories(remote: RemoteConfig, basePath: String, password: String?) async -> [RemoteDirectoryEntry] {
+        let sessionID = await openSession(remote: remote, password: password)
+        let requestID = UInt64.random(in: 1..<UInt64.max)
+        let snapshot = await listDirectories(sessionID: sessionID, path: basePath, requestID: requestID)
+        await closeSession(sessionID)
         return snapshot.entries.map { RemoteDirectoryEntry(name: $0.name, fullPath: $0.fullPath) }
     }
 
     // Compatibility method for parser tests.
+    @available(*, deprecated, message: "Use session-based APIs directly.")
     /// Beginner note: This method is one step in the feature workflow for this file.
     func parseDirectories(from output: String, basePath: String) -> [RemoteDirectoryEntry] {
         let parsed = SFTPDirectoryParser.parse(output: output, basePath: basePath)
-        return parsed.entries.filter(\.isDirectory).map { RemoteDirectoryEntry(name: $0.name, fullPath: $0.fullPath) }
+        // Parser output already contains directories only.
+        return parsed.entries.map { RemoteDirectoryEntry(name: $0.name, fullPath: $0.fullPath) }
     }
 }

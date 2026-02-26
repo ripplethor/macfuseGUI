@@ -10,24 +10,72 @@ import AppKit
 import SwiftUI
 
 @MainActor
+/// Beginner note: Shared window setup keeps sizing, activation, and persistence behavior consistent.
+class BaseSettingsWindowController: NSWindowController {
+    private static let defaultWindowSize = NSSize(width: 980, height: 620)
+    private static let minimumWindowSize = NSSize(width: 600, height: 400)
+
+    private let hasSavedFrame: Bool
+    private var didApplyInitialCentering = false
+
+    /// Beginner note: Initializers create valid state before any other method is used.
+    init(
+        rootView: AnyView,
+        title: String,
+        frameAutosaveName: String
+    ) {
+        hasSavedFrame = UserDefaults.standard.object(forKey: "NSWindow Frame \(frameAutosaveName)") != nil
+        let hosting = NSHostingController(rootView: rootView)
+        let window = NSWindow(contentViewController: hosting)
+        window.title = title
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.setContentSize(Self.defaultWindowSize)
+        window.minSize = Self.minimumWindowSize
+        window.isReleasedWhenClosed = false
+        window.setFrameAutosaveName(frameAutosaveName)
+
+        super.init(window: window)
+    }
+
+    @available(*, unavailable)
+    /// Beginner note: Initializers create valid state before any other method is used.
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    override func showWindow(_ sender: Any?) {
+        if !didApplyInitialCentering && !hasSavedFrame {
+            window?.center()
+            didApplyInitialCentering = true
+        }
+
+        super.showWindow(sender)
+        window?.makeKeyAndOrderFront(sender)
+        if #available(macOS 14.0, *) {
+            NSApp.activate()
+        } else {
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+}
+
+@MainActor
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
-final class SettingsWindowController: NSWindowController {
+final class SettingsWindowController: BaseSettingsWindowController {
     /// Beginner note: Initializers create valid state before any other method is used.
     init(viewModel: RemotesViewModel, onOpenEditorPlugins: @escaping () -> Void) {
         let root = SettingsRootView(
             viewModel: viewModel,
             onOpenEditorPlugins: onOpenEditorPlugins
         )
-        let hosting = NSHostingController(rootView: root)
-        let window = NSWindow(contentViewController: hosting)
-        window.title = "macfuseGui Settings"
-        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-        window.setContentSize(NSSize(width: 980, height: 620))
-        window.isReleasedWhenClosed = false
-        window.center()
-
-        super.init(window: window)
+        let appName = Bundle.main.object(forInfoDictionaryKey: kCFBundleNameKey as String) as? String ?? "App"
+        super.init(
+            rootView: AnyView(root),
+            title: "\(appName) Settings",
+            frameAutosaveName: "SettingsWindow"
+        )
     }
 
     @available(*, unavailable)
@@ -36,41 +84,24 @@ final class SettingsWindowController: NSWindowController {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// Beginner note: This method is one step in the feature workflow for this file.
-    override func showWindow(_ sender: Any?) {
-        super.showWindow(sender)
-        window?.makeKeyAndOrderFront(sender)
-        NSApp.activate(ignoringOtherApps: true)
-    }
 }
 
 @MainActor
 /// Beginner note: Dedicated controller for plugin management so settings stay focused.
-final class EditorPluginSettingsWindowController: NSWindowController {
+final class EditorPluginSettingsWindowController: BaseSettingsWindowController {
     /// Beginner note: Initializers create valid state before any other method is used.
     init(editorPluginRegistry: EditorPluginRegistry) {
         let root = EditorPluginSettingsView(editorPluginRegistry: editorPluginRegistry)
-        let hosting = NSHostingController(rootView: root)
-        let window = NSWindow(contentViewController: hosting)
-        window.title = "Editor Plugins"
-        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-        window.setContentSize(NSSize(width: 980, height: 620))
-        window.isReleasedWhenClosed = false
-        window.center()
-
-        super.init(window: window)
+        super.init(
+            rootView: AnyView(root),
+            title: "Editor Plugins",
+            frameAutosaveName: "EditorPluginSettingsWindow"
+        )
     }
 
     @available(*, unavailable)
     /// Beginner note: Initializers create valid state before any other method is used.
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
-    }
-
-    /// Beginner note: This method is one step in the feature workflow for this file.
-    override func showWindow(_ sender: Any?) {
-        super.showWindow(sender)
-        window?.makeKeyAndOrderFront(sender)
-        NSApp.activate(ignoringOtherApps: true)
     }
 }

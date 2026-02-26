@@ -20,11 +20,17 @@ enum EditorOpenMode: Equatable, Sendable {
 struct EditorLaunchAttemptResult: Sendable {
     let label: String
     let executable: String
-    let arguments: [String]
+    // Arguments are stored after {folderPath} placeholder substitution.
+    let resolvedArguments: [String]
     let timeoutSeconds: TimeInterval
     let exitCode: Int32
     let timedOut: Bool
+    let failedToStart: Bool
     let output: String
+
+    var arguments: [String] {
+        resolvedArguments
+    }
 
     var success: Bool {
         !timedOut && exitCode == 0
@@ -71,6 +77,8 @@ final class EditorOpenService {
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This is async: it can suspend and resume later without blocking a thread.
     func open(folderURL: URL, remoteName: String, mode: EditorOpenMode) async -> EditorOpenResult {
+        // Snapshot plugin ordering once per open request. This intentionally avoids
+        // mid-flight catalog churn while attempts are in progress.
         let plugins = pluginOrder(for: mode)
 
         guard !plugins.isEmpty else {
@@ -84,6 +92,29 @@ final class EditorOpenService {
             )
         }
 
+        // Use a decoded POSIX path for process arguments (not a percent-encoded URL path).
+        var folderPath = folderURL.path(percentEncoded: false)
+        if folderPath.count > 1 && folderPath.hasSuffix("/") {
+            folderPath.removeLast()
+        }
+        return await Self.openWithPluginsSnapshot(
+            plugins: plugins,
+            runner: runner,
+            folderPath: folderPath,
+            remoteName: remoteName,
+            mode: mode,
+            folderPathPlaceholder: folderPathPlaceholder
+        )
+    }
+
+    private nonisolated static func openWithPluginsSnapshot(
+        plugins: [EditorPluginDefinition],
+        runner: ProcessRunning,
+        folderPath: String,
+        remoteName: String,
+        mode: EditorOpenMode,
+        folderPathPlaceholder: String
+    ) async -> EditorOpenResult {
         var pluginResults: [EditorPluginOpenResult] = []
 
         for plugin in plugins {
@@ -91,10 +122,11 @@ final class EditorOpenService {
 
             for attempt in plugin.launchAttempts {
                 let resolvedArguments = attempt.arguments.map {
-                    $0.replacingOccurrences(of: folderPathPlaceholder, with: folderURL.path)
+                    $0.replacingOccurrences(of: folderPathPlaceholder, with: folderPath)
                 }
 
                 let result = await runProcess(
+                    runner: runner,
                     executable: attempt.executable,
                     arguments: resolvedArguments,
                     timeout: attempt.timeoutSeconds
@@ -103,15 +135,18 @@ final class EditorOpenService {
                 let launchAttemptResult = EditorLaunchAttemptResult(
                     label: attempt.label,
                     executable: attempt.executable,
-                    arguments: resolvedArguments,
+                    resolvedArguments: resolvedArguments,
                     timeoutSeconds: attempt.timeoutSeconds,
                     exitCode: result.exitCode,
                     timedOut: result.timedOut,
+                    failedToStart: result.failedToStart,
                     output: result.output
                 )
 
                 attempts.append(launchAttemptResult)
 
+                // By design we continue trying all launch attempts, even after a timeout,
+                // so each plugin can exhaust its fallback chain.
                 if launchAttemptResult.success {
                     let pluginResult = EditorPluginOpenResult(
                         pluginID: plugin.id,
@@ -178,15 +213,17 @@ final class EditorOpenService {
         case .preferredWithFallback:
             return "No active editor plugins. Enable one in Settings > Editor Plugins."
         case .explicit(let pluginID):
-            return "Editor plugin '\(pluginID)' is not active."
+            let displayName = pluginRegistry.plugin(id: pluginID)?.displayName ?? pluginID
+            return "Editor plugin '\(displayName)' is not active."
         }
     }
 
-    private func runProcess(
+    private nonisolated static func runProcess(
+        runner: ProcessRunning,
         executable: String,
         arguments: [String],
         timeout: TimeInterval
-    ) async -> (exitCode: Int32, timedOut: Bool, output: String) {
+    ) async -> (exitCode: Int32, timedOut: Bool, failedToStart: Bool, output: String) {
         do {
             let result = try await runner.run(
                 executable: executable,
@@ -198,9 +235,9 @@ final class EditorOpenService {
                 .joined(separator: "\n")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
 
-            return (result.exitCode, result.timedOut, combined)
+            return (result.exitCode, result.timedOut, false, combined)
         } catch {
-            return (-1, false, error.localizedDescription)
+            return (-1, false, true, error.localizedDescription)
         }
     }
 }

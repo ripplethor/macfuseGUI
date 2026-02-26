@@ -79,6 +79,46 @@ final class ValidationServiceTests: XCTestCase {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
+    func testValidationRejectsHostWithControlCharacter() {
+        let draft = RemoteDraft(
+            displayName: "Host With Control",
+            host: "exa\nmple.com",
+            port: 22,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: "",
+            password: "secret",
+            remoteDirectory: "/home/dev",
+            localMountPoint: FileManager.default.temporaryDirectory.path
+        )
+
+        let service = ValidationService()
+        let errors = service.validateDraft(draft, hasStoredPassword: false)
+        XCTAssertTrue(errors.contains("Host/IP contains invalid control characters."))
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func testValidationRejectsUnsupportedTildeRemotePathVariants() {
+        let draft = RemoteDraft(
+            displayName: "Tilde User Path",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: "",
+            password: "secret",
+            remoteDirectory: "~root/projects",
+            localMountPoint: FileManager.default.temporaryDirectory.path
+        )
+
+        let service = ValidationService()
+        let errors = service.validateDraft(draft, hasStoredPassword: false)
+        XCTAssertTrue(
+            errors.contains("Remote directory must be absolute (for example /home/user or C:/Users/User).")
+        )
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
     func testRecoveryBackoffIsAggressiveAfterWakeForTransientFailure() {
         XCTAssertEqual(
             RemotesViewModel.reconnectDelaySeconds(

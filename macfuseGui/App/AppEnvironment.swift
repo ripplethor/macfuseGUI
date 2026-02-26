@@ -78,7 +78,7 @@ final class AppEnvironment {
         remoteStore = JSONRemoteStore()
         keychainService = KeychainService()
         validationService = ValidationService()
-        askpassHelper = AskpassHelper()
+        askpassHelper = AskpassHelper(diagnostics: diagnosticsService)
         mountStateParser = MountStateParser()
         mountCommandBuilder = MountCommandBuilder(redactionService: redactionService)
         unmountService = UnmountService(

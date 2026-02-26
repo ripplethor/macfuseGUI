@@ -105,6 +105,31 @@ static char *macfusegui_strdup(const char *value) {
     return macfusegui_strdup_len(value, strlen(value));
 }
 
+static char *macfusegui_build_session_error_string(LIBSSH2_SESSION *session, const char *fallback_message) {
+    if (session != NULL) {
+        char *raw = NULL;
+        int raw_len = 0;
+        int libssh2_error = libssh2_session_last_error(session, &raw, &raw_len, 0);
+
+        if (raw != NULL && raw_len > 0) {
+            char prefix[64];
+            snprintf(prefix, sizeof(prefix), "libssh2 error %d: ", libssh2_error);
+
+            size_t prefix_len = strlen(prefix);
+            size_t total_len = prefix_len + (size_t)raw_len;
+            char *buffer = (char *)malloc(total_len + 1);
+            if (buffer != NULL) {
+                memcpy(buffer, prefix, prefix_len);
+                memcpy(buffer + prefix_len, raw, (size_t)raw_len);
+                buffer[total_len] = '\0';
+                return buffer;
+            }
+        }
+    }
+
+    return macfusegui_strdup(fallback_message != NULL ? fallback_message : "Unknown libssh2 error.");
+}
+
 static void macfusegui_set_error(macfusegui_libssh2_list_result *result, int32_t status_code, const char *message) {
     if (result == NULL) {
         return;
@@ -125,56 +150,18 @@ static void macfusegui_set_session_error(
     int32_t fallback_status,
     const char *fallback_message
 ) {
-    /* Pull detailed libssh2 error text to preserve native failure context. */
-    char *raw = NULL;
-    int raw_len = 0;
-    int libssh2_error = libssh2_session_last_error(session, &raw, &raw_len, 0);
-
-    if (raw != NULL && raw_len > 0) {
-        char prefix[64];
-        snprintf(prefix, sizeof(prefix), "libssh2 error %d: ", libssh2_error);
-
-        size_t prefix_len = strlen(prefix);
-        size_t total_len = prefix_len + (size_t)raw_len;
-        char *buffer = (char *)malloc(total_len + 1);
-        if (buffer != NULL) {
-            memcpy(buffer, prefix, prefix_len);
-            memcpy(buffer + prefix_len, raw, (size_t)raw_len);
-            buffer[total_len] = '\0';
-            macfusegui_set_error(result, fallback_status, buffer);
-            free(buffer);
-            return;
-        }
+    char *message = macfusegui_build_session_error_string(session, fallback_message);
+    if (message != NULL) {
+        macfusegui_set_error(result, fallback_status, message);
+        free(message);
+        return;
     }
 
     macfusegui_set_error(result, fallback_status, fallback_message);
 }
 
 static char *macfusegui_session_error_message(LIBSSH2_SESSION *session, const char *fallback_message) {
-    if (session == NULL) {
-        return macfusegui_strdup(fallback_message != NULL ? fallback_message : "Unknown libssh2 error.");
-    }
-
-    char *raw = NULL;
-    int raw_len = 0;
-    int libssh2_error = libssh2_session_last_error(session, &raw, &raw_len, 0);
-
-    if (raw != NULL && raw_len > 0) {
-        char prefix[64];
-        snprintf(prefix, sizeof(prefix), "libssh2 error %d: ", libssh2_error);
-
-        size_t prefix_len = strlen(prefix);
-        size_t total_len = prefix_len + (size_t)raw_len;
-        char *buffer = (char *)malloc(total_len + 1);
-        if (buffer != NULL) {
-            memcpy(buffer, prefix, prefix_len);
-            memcpy(buffer + prefix_len, raw, (size_t)raw_len);
-            buffer[total_len] = '\0';
-            return buffer;
-        }
-    }
-
-    return macfusegui_strdup(fallback_message != NULL ? fallback_message : "Unknown libssh2 error.");
+    return macfusegui_build_session_error_string(session, fallback_message);
 }
 
 static bool macfusegui_equals_ignore_case(char a, char b) {
@@ -437,6 +424,7 @@ static int macfusegui_connect_socket(const char *host, int32_t port, int32_t tim
         int one = 1;
         (void)setsockopt(candidate, SOL_SOCKET, SO_KEEPALIVE, &one, sizeof(one));
 
+        /* Keep socket non-blocking after connect; bridge wait loops depend on this mode. */
         if (macfusegui_set_socket_blocking(candidate, false) != 0) {
             close(candidate);
             continue;
@@ -484,11 +472,17 @@ static int macfusegui_append_entry(
         return -1;
     }
 
+    char *name_copy = macfusegui_strdup(name);
+    if (name_copy == NULL) {
+        return -1;
+    }
+
     int32_t next_count = result->entry_count + 1;
     size_t bytes = (size_t)next_count * sizeof(macfusegui_libssh2_entry);
 
     macfusegui_libssh2_entry *resized = (macfusegui_libssh2_entry *)realloc(result->entries, bytes);
     if (resized == NULL) {
+        free(name_copy);
         return -1;
     }
 
@@ -497,11 +491,7 @@ static int macfusegui_append_entry(
     macfusegui_libssh2_entry *entry = &result->entries[result->entry_count];
     memset(entry, 0, sizeof(*entry));
 
-    entry->name = macfusegui_strdup(name);
-    if (entry->name == NULL) {
-        return -1;
-    }
-
+    entry->name = name_copy;
     entry->is_directory = is_directory;
     entry->has_size = has_size;
     entry->size_bytes = size_bytes;
@@ -568,12 +558,17 @@ static int macfusegui_kbdint_auth_with_deadline(
     const char *password,
     int64_t deadline_ms
 ) {
-    macfusegui_kbdint_context keyboard_context;
-    keyboard_context.password = password;
+    macfusegui_kbdint_context *keyboard_context = (macfusegui_kbdint_context *)malloc(sizeof(*keyboard_context));
+    if (keyboard_context == NULL) {
+        return LIBSSH2_ERROR_ALLOC;
+    }
+    keyboard_context->password = password;
 
     void **session_abstract = libssh2_session_abstract(session);
+    void *previous_abstract = NULL;
     if (session_abstract != NULL) {
-        *session_abstract = &keyboard_context;
+        previous_abstract = *session_abstract;
+        *session_abstract = keyboard_context;
     }
 
     int auth_result = LIBSSH2_ERROR_EAGAIN;
@@ -599,8 +594,9 @@ static int macfusegui_kbdint_auth_with_deadline(
     }
 
     if (session_abstract != NULL) {
-        *session_abstract = NULL;
+        *session_abstract = previous_abstract;
     }
+    free(keyboard_context);
     return auth_result;
 }
 
@@ -768,7 +764,7 @@ static ssize_t macfusegui_sftp_readdir_with_deadline(
         );
         if (result != LIBSSH2_ERROR_EAGAIN) {
             if (out_status != NULL) {
-                *out_status = 0;
+                *out_status = (result < 0) ? (int)result : 0;
             }
             return result;
         }
@@ -1025,7 +1021,7 @@ int32_t macfusegui_libssh2_list_directories_with_session(
         macfusegui_set_result_timeout_error(out_result, -30, "SFTP realpath", timeout_seconds);
         goto cleanup;
     }
-    if (real_path_len > 0) {
+    if (real_path_len > 0 && real_path_len < (ssize_t)(sizeof(real_path_buffer) - 1)) {
         real_path_buffer[real_path_len] = '\0';
         effective_path = real_path_buffer;
     }
@@ -1186,6 +1182,7 @@ int32_t macfusegui_libssh2_ping_session(
 
     size_t path_len = strlen(remote_path);
     if (path_len > 1 && remote_path[path_len - 1] == '/') {
+        /* Compatibility fallback only: some servers fail stat on trailing slash paths. */
         char *trimmed = macfusegui_strdup(remote_path);
         if (trimmed != NULL) {
             while (path_len > 1 && trimmed[path_len - 1] == '/') {
@@ -1223,16 +1220,11 @@ int32_t macfusegui_libssh2_ping_session(
 void macfusegui_libssh2_close_session(macfusegui_libssh2_session_handle *session_handle) {
     /*
      Close flow is defensive:
-     - Shutdown socket first to break pending waits quickly.
      - Attempt graceful SFTP/session shutdown with bounded waits.
-     - Always free handle resources.
+     - Shutdown socket last and always free handle resources.
     */
     if (session_handle == NULL) {
         return;
-    }
-
-    if (session_handle->sock >= 0) {
-        (void)shutdown(session_handle->sock, SHUT_RDWR);
     }
 
     if (session_handle->sftp != NULL && session_handle->session != NULL && session_handle->sock >= 0) {
@@ -1270,6 +1262,7 @@ void macfusegui_libssh2_close_session(macfusegui_libssh2_session_handle *session
     }
 
     if (session_handle->sock >= 0) {
+        (void)shutdown(session_handle->sock, SHUT_RDWR);
         close(session_handle->sock);
         session_handle->sock = -1;
     }
@@ -1278,9 +1271,7 @@ void macfusegui_libssh2_close_session(macfusegui_libssh2_session_handle *session
 }
 
 void macfusegui_libssh2_free_error(char *error_message) {
-    if (error_message != NULL) {
-        free(error_message);
-    }
+    free(error_message);
 }
 
 int32_t macfusegui_libssh2_list_directories(
@@ -1349,6 +1340,7 @@ int32_t macfusegui_libssh2_list_directories(
     }
 
     int64_t elapsed_ms = macfusegui_now_millis() - started_at;
+    /* Intentional: one-shot latency includes open + list + close end-to-end time. */
     out_result->latency_ms = (int32_t)(elapsed_ms > 0 ? elapsed_ms : 0);
     return list_status;
 }

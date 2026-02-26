@@ -36,6 +36,10 @@ final class EditorPluginRegistry: ObservableObject {
     private let bundledBuiltInPluginsFolderName = "EditorPlugins"
     private let bundledPluginManifestFileName = "plugin.json"
 
+    private func normalizedPluginID(_ id: String) -> String {
+        id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
     /// Beginner note: Initializers create valid state before any other method is used.
     init(
         fileManager: FileManager = .default,
@@ -83,15 +87,16 @@ final class EditorPluginRegistry: ObservableObject {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     func setPluginActive(_ active: Bool, pluginID: String) {
-        guard let plugin = catalog.first(where: { $0.id == pluginID }) else {
+        let normalizedID = normalizedPluginID(pluginID)
+        guard let plugin = catalog.first(where: { $0.id == normalizedID }) else {
             return
         }
 
         var overrides = activationOverrides()
         if active == plugin.defaultEnabled {
-            overrides.removeValue(forKey: pluginID)
+            overrides.removeValue(forKey: normalizedID)
         } else {
-            overrides[pluginID] = active
+            overrides[normalizedID] = active
         }
         userDefaults.set(overrides, forKey: activationOverridesKey)
 
@@ -100,7 +105,7 @@ final class EditorPluginRegistry: ObservableObject {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     func setPreferredPlugin(_ pluginID: String?) {
-        let normalized = pluginID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = pluginID.map { normalizedPluginID($0) }
         if let normalized, !normalized.isEmpty {
             userDefaults.set(normalized, forKey: preferredPluginIDKey)
         } else {
@@ -122,12 +127,14 @@ final class EditorPluginRegistry: ObservableObject {
         guard let preferredPluginID else {
             return nil
         }
-        return plugins.first(where: { $0.id == preferredPluginID && $0.isActive })
+        let normalizedID = normalizedPluginID(preferredPluginID)
+        return plugins.first(where: { $0.id == normalizedID && $0.isActive })
     }
 
     /// Beginner note: This helper lets callers resolve plugin metadata by ID.
     func plugin(id: String) -> EditorPluginDefinition? {
-        plugins.first(where: { $0.id == id })
+        let normalizedID = normalizedPluginID(id)
+        return plugins.first(where: { $0.id == normalizedID })
     }
 
     /// Beginner note: Resolve plugin manifest file URL for edit/reveal actions.
@@ -162,10 +169,11 @@ final class EditorPluginRegistry: ObservableObject {
     /// Beginner note: Saves edited JSON and reloads plugin catalog immediately.
     @discardableResult
     func saveManifestText(_ text: String, for pluginID: String) throws -> String {
-        guard let definition = plugin(id: pluginID) else {
+        let normalizedID = normalizedPluginID(pluginID)
+        guard let definition = plugin(id: normalizedID) else {
             throw AppError.validationFailed(["Plugin '\(pluginID)' is not available."])
         }
-        guard let manifestURL = manifestFileURL(for: pluginID) else {
+        guard let manifestURL = manifestFileURL(for: normalizedID) else {
             throw AppError.validationFailed(["Manifest file not found for plugin '\(pluginID)'."])
         }
 
@@ -198,14 +206,13 @@ final class EditorPluginRegistry: ObservableObject {
                 ])
             }
 
-            if validated.id != pluginID,
-               let existing = plugin(id: validated.id),
-               existing.source == .external {
+            if validated.id != normalizedID {
                 throw AppError.validationFailed([
-                    "\(manifestURL.lastPathComponent): External plugin ID '\(validated.id)' already exists."
+                    "\(manifestURL.lastPathComponent): External plugin ID cannot be changed after creation."
                 ])
             }
-        } else if validated.id != pluginID {
+
+        } else if validated.id != normalizedID {
             throw AppError.validationFailed([
                 "\(manifestURL.lastPathComponent): Built-in plugin ID cannot be changed."
             ])
@@ -257,9 +264,7 @@ final class EditorPluginRegistry: ObservableObject {
 
     /// Beginner note: Create a starter external plugin manifest in the live plugin directory.
     func createExternalPluginTemplateFile() throws -> URL {
-        var issues: [EditorPluginLoadIssue] = []
-        let builtIns = builtInCatalog(issues: &issues)
-        preparePluginsDirectoryScaffold(builtIns: builtIns, issues: &issues)
+        try ensurePluginsDirectoryExists()
 
         let existingPluginIDs = Set(plugins.map(\.id))
         var sequence = 1
@@ -336,6 +341,17 @@ final class EditorPluginRegistry: ObservableObject {
             return nil
         }
 
+        let normalizedID = normalizedPluginID(pluginID)
+        guard !normalizedID.isEmpty else {
+            return nil
+        }
+
+        // Fast path: external manifest files are expected to use "<plugin-id>.json".
+        let directURL = pluginsDirectoryURL.appendingPathComponent("\(normalizedID).json")
+        if fileManager.fileExists(atPath: directURL.path) {
+            return directURL
+        }
+
         let candidateFiles: [URL]
         do {
             candidateFiles = try fileManager
@@ -355,8 +371,8 @@ final class EditorPluginRegistry: ObservableObject {
                 continue
             }
 
-            let manifestID = manifest.id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            if manifestID == pluginID {
+            let manifestID = normalizedPluginID(manifest.id)
+            if manifestID == normalizedID {
                 return fileURL
             }
         }
@@ -394,6 +410,16 @@ final class EditorPluginRegistry: ObservableObject {
         )
 
         writeBuiltInReferenceFiles(builtIns: builtIns, issues: &issues)
+    }
+
+    private func ensurePluginsDirectoryExists() throws {
+        do {
+            try fileManager.createDirectory(at: pluginsDirectoryURL, withIntermediateDirectories: true)
+        } catch {
+            throw AppError.validationFailed([
+                "Failed to create plugin directory '\(pluginsDirectoryURL.path)': \(error.localizedDescription)"
+            ])
+        }
     }
 
     private func writeBuiltInReferenceFiles(
@@ -509,7 +535,7 @@ final class EditorPluginRegistry: ObservableObject {
         projected.sort(by: pluginSort)
 
         let activeIDs = projected.filter { $0.isActive }.map(\.id)
-        let storedPreferred = userDefaults.string(forKey: preferredPluginIDKey)
+        let storedPreferred = userDefaults.string(forKey: preferredPluginIDKey).map { normalizedPluginID($0) }
         let resolvedPreferred = resolvePreferredID(storedPreferred: storedPreferred, activeIDs: activeIDs)
 
         preferredPluginID = resolvedPreferred
@@ -531,7 +557,7 @@ final class EditorPluginRegistry: ObservableObject {
     }
 
     private func resolvePreferredID(storedPreferred: String?, activeIDs: [String]) -> String? {
-        if let storedPreferred,
+        if let storedPreferred = storedPreferred.map({ normalizedPluginID($0) }),
            activeIDs.contains(storedPreferred) {
             return storedPreferred
         }
@@ -577,7 +603,7 @@ final class EditorPluginRegistry: ObservableObject {
             return []
         }
 
-        var plugins: [(file: String, plugin: EditorPluginDefinition)] = []
+        var loadedPlugins: [(file: String, plugin: EditorPluginDefinition)] = []
         var seenIDs: Set<String> = []
 
         for fileURL in candidateFiles {
@@ -597,7 +623,7 @@ final class EditorPluginRegistry: ObservableObject {
                 }
 
                 seenIDs.insert(validated.id)
-                plugins.append((fileURL.lastPathComponent, validated))
+                loadedPlugins.append((fileURL.lastPathComponent, validated))
             } catch {
                 issues.append(
                     EditorPluginLoadIssue(
@@ -608,7 +634,7 @@ final class EditorPluginRegistry: ObservableObject {
             }
         }
 
-        return plugins
+        return loadedPlugins
     }
 
     private func validate(
@@ -616,7 +642,7 @@ final class EditorPluginRegistry: ObservableObject {
         fileName: String,
         source: EditorPluginSource = .external
     ) throws -> EditorPluginDefinition {
-        let id = manifest.id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let id = normalizedPluginID(manifest.id)
         guard !id.isEmpty else {
             throw AppError.validationFailed(["\(fileName): Plugin id is required."])
         }
@@ -633,7 +659,10 @@ final class EditorPluginRegistry: ObservableObject {
             throw AppError.validationFailed(["\(fileName): At least one launch attempt is required."])
         }
 
-        let priority = max(0, manifest.priority)
+        guard manifest.priority >= 0 else {
+            throw AppError.validationFailed(["\(fileName): priority must be 0 or greater."])
+        }
+        let priority = manifest.priority
 
         let attempts = try manifest.launchAttempts.enumerated().map { index, candidate in
             try validate(attempt: candidate, index: index, fileName: fileName)
@@ -738,6 +767,12 @@ final class EditorPluginRegistry: ObservableObject {
         if !bundled.isEmpty {
             return bundled
         }
+        issues.append(
+            EditorPluginLoadIssue(
+                file: bundledBuiltInPluginsFolderName,
+                reason: "Bundled built-in plugin catalog was unavailable. Falling back to hardcoded built-ins."
+            )
+        )
         return hardcodedBuiltInCatalog()
     }
 

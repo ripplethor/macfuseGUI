@@ -12,6 +12,7 @@ import Foundation
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 protocol RemoteStore {
+    // Implementations should keep this URL stable for the lifetime of the store instance.
     var storageURL: URL { get }
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This can throw an error: callers should use do/try/catch or propagate the error.
@@ -33,6 +34,12 @@ protocol RemoteStore {
 final class JSONRemoteStore: RemoteStore {
     let storageURL: URL
     private let fileManager: FileManager
+    private let decoder = JSONDecoder()
+    private let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return encoder
+    }()
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init(
@@ -61,10 +68,11 @@ final class JSONRemoteStore: RemoteStore {
 
         do {
             let data = try Data(contentsOf: storageURL)
-            let decoder = JSONDecoder()
             return try decoder.decode([RemoteConfig].self, from: data)
+        } catch let decodingError as DecodingError {
+            throw AppError.persistenceError("Corrupt remotes file: \(decodingError.localizedDescription)")
         } catch {
-            throw AppError.persistenceError("Failed to load remotes: \(error.localizedDescription)")
+            throw AppError.persistenceError("Failed to read remotes file: \(error.localizedDescription)")
         }
     }
 
@@ -75,10 +83,15 @@ final class JSONRemoteStore: RemoteStore {
         try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
 
         do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(remotes)
             try data.write(to: storageURL, options: .atomic)
+            // Verify the on-disk payload still decodes before reporting success.
+            let writtenData = try Data(contentsOf: storageURL)
+            _ = try decoder.decode([RemoteConfig].self, from: writtenData)
+        } catch let encodingError as EncodingError {
+            throw AppError.persistenceError("Failed to encode remotes: \(encodingError.localizedDescription)")
+        } catch let decodingError as DecodingError {
+            throw AppError.persistenceError("Saved remotes file is unreadable: \(decodingError.localizedDescription)")
         } catch {
             throw AppError.persistenceError("Failed to save remotes: \(error.localizedDescription)")
         }
@@ -87,6 +100,7 @@ final class JSONRemoteStore: RemoteStore {
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This can throw an error: callers should use do/try/catch or propagate the error.
     func upsert(_ remote: RemoteConfig) throws {
+        // Read-modify-write is process-local serialized via @MainActor and synchronous I/O.
         var remotes = try load()
         if let index = remotes.firstIndex(where: { $0.id == remote.id }) {
             remotes[index] = remote
@@ -99,7 +113,12 @@ final class JSONRemoteStore: RemoteStore {
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This can throw an error: callers should use do/try/catch or propagate the error.
     func delete(id: UUID) throws {
-        let remotes = try load().filter { $0.id != id }
-        try save(remotes)
+        // Read-modify-write is process-local serialized via @MainActor and synchronous I/O.
+        let remotes = try load()
+        let filtered = remotes.filter { $0.id != id }
+        guard filtered.count != remotes.count else {
+            throw AppError.persistenceError("Remote \(id.uuidString) was not found.")
+        }
+        try save(filtered)
     }
 }

@@ -11,6 +11,10 @@ import Foundation
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 enum BrowserPathNormalizer {
+    private static func collapseRepeatedSlashes(_ value: String) -> String {
+        value.replacingOccurrences(of: "/{2,}", with: "/", options: .regularExpression)
+    }
+
     static func normalize(path: String) -> String {
         var normalized = path.trimmingCharacters(in: .whitespacesAndNewlines)
         if normalized.isEmpty {
@@ -18,9 +22,7 @@ enum BrowserPathNormalizer {
         }
 
         normalized = normalized.replacingOccurrences(of: "\\", with: "/")
-        while normalized.contains("//") {
-            normalized = normalized.replacingOccurrences(of: "//", with: "/")
-        }
+        normalized = collapseRepeatedSlashes(normalized)
 
         normalized = normalizeWindowsDriveArtifacts(normalized)
 
@@ -35,6 +37,8 @@ enum BrowserPathNormalizer {
             normalized = "/\(normalized)"
         }
 
+        // Run a second pass after adding a leading slash so values like "/D::"
+        // and "/D::/wwwroot" are canonicalized to "/D:/" and "/D:/wwwroot".
         normalized = normalizeWindowsDriveArtifacts(normalized)
 
         if normalized.hasPrefix("~/") {
@@ -63,7 +67,7 @@ enum BrowserPathNormalizer {
         let normalized = normalize(path: path)
 
         if normalized == "/" || normalized == "~" {
-            return normalized == "~" ? "~" : "/"
+            return normalized
         }
 
         if normalized.hasPrefix("~/") {
@@ -96,6 +100,19 @@ enum BrowserPathNormalizer {
         let normalizedBase = normalize(path: base)
         let normalizedChild = child.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        if normalizedChild.isEmpty {
+            return normalizedBase
+        }
+
+        let childForChecks = normalizedChild.replacingOccurrences(of: "\\", with: "/")
+        // Absolute child paths replace the base path, matching POSIX join semantics.
+        if childForChecks.hasPrefix("/")
+            || childForChecks == "~"
+            || childForChecks.hasPrefix("~/")
+            || isWindowsDrivePath(childForChecks) {
+            return normalize(path: childForChecks)
+        }
+
         if normalizedBase == "/" {
             return normalize(path: "/\(normalizedChild)")
         }
@@ -108,6 +125,8 @@ enum BrowserPathNormalizer {
     }
 
     static func rootCandidates(for username: String) -> [String] {
+        // The list is intentionally speculative so browser root navigation still
+        // works across both UNIX-like and Windows OpenSSH servers.
         let fallback = ["/", "/C:/", "/D:/", "/C:/Users/\(username)", "~"]
         var seen: Set<String> = []
         var ordered: [String] = []
@@ -127,8 +146,9 @@ enum BrowserPathNormalizer {
         guard trimmed.count == 2 else {
             return false
         }
-        let chars = Array(trimmed)
-        return chars[0].isLetter && chars[1] == ":"
+        let first = trimmed[trimmed.startIndex]
+        let second = trimmed[trimmed.index(after: trimmed.startIndex)]
+        return first.isLetter && second == ":"
     }
 
     private static func isWindowsDrivePath(_ value: String) -> Bool {
@@ -136,36 +156,44 @@ enum BrowserPathNormalizer {
             return false
         }
 
-        let chars = Array(value)
-        guard chars[0].isLetter, chars[1] == ":" else {
+        let start = value.startIndex
+        let secondIndex = value.index(after: start)
+        let first = value[start]
+        let second = value[secondIndex]
+        guard first.isLetter, second == ":" else {
             return false
         }
 
-        guard chars.count >= 3 else {
+        guard value.count >= 3 else {
             return true
         }
 
-        return chars[2] == "/" || chars[2] == "\\" || chars[2] == ":"
+        let third = value[value.index(start, offsetBy: 2)]
+        return third == "/" || third == "\\"
     }
 
-    private static func normalizeWindowsDriveArtifacts(_ value: String) -> String {
-        guard !value.isEmpty else {
-            return value
+    private static func normalizeWindowsDriveArtifacts(_ original: String) -> String {
+        guard !original.isEmpty else {
+            return original
         }
 
-        var working = value
+        var working = original
         let hadLeadingSlash = working.hasPrefix("/")
         if hadLeadingSlash {
             working.removeFirst()
         }
 
+        // Return the original value. `working` may have had a leading slash removed.
         guard working.count >= 2 else {
-            return value
+            return original
         }
 
-        let chars = Array(working)
-        guard chars[0].isLetter, chars[1] == ":" else {
-            return value
+        let start = working.startIndex
+        let secondIndex = working.index(after: start)
+        let driveLetter = working[start]
+        let driveSeparator = working[secondIndex]
+        guard driveLetter.isLetter, driveSeparator == ":" else {
+            return original
         }
 
         var tail = String(working.dropFirst(2))
@@ -173,9 +201,7 @@ enum BrowserPathNormalizer {
             tail.removeFirst()
         }
 
-        while tail.contains("//") {
-            tail = tail.replacingOccurrences(of: "//", with: "/")
-        }
+        tail = collapseRepeatedSlashes(tail)
 
         if tail.isEmpty {
             tail = "/"
@@ -185,7 +211,7 @@ enum BrowserPathNormalizer {
             tail = "/\(tail)"
         }
 
-        let rebuilt = "\(chars[0]):\(tail)"
+        let rebuilt = "\(driveLetter):\(tail)"
         return hadLeadingSlash ? "/\(rebuilt)" : rebuilt
     }
 
@@ -194,7 +220,13 @@ enum BrowserPathNormalizer {
         guard trimmed.count == 4 else {
             return false
         }
-        let chars = Array(trimmed)
-        return chars[0] == "/" && chars[1].isLetter && chars[2] == ":" && chars[3] == "/"
+        let start = trimmed.startIndex
+        let second = trimmed.index(after: start)
+        let third = trimmed.index(after: second)
+        let fourth = trimmed.index(after: third)
+        return trimmed[start] == "/"
+            && trimmed[second].isLetter
+            && trimmed[third] == ":"
+            && trimmed[fourth] == "/"
     }
 }

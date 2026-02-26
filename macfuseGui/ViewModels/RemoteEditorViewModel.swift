@@ -12,34 +12,57 @@ import Foundation
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 final class RemoteEditorViewModel: ObservableObject {
-    @Published var draft: RemoteDraft
+    @Published var draft: RemoteDraft {
+        didSet {
+            guard draft != oldValue else {
+                return
+            }
+            clearDraftFeedback()
+        }
+    }
     @Published var validationErrors: [String] = []
     @Published var isSaving: Bool = false
     @Published var isTestingConnection: Bool = false
     @Published var testResultMessage: String?
     @Published var testResultIsSuccess: Bool = false
 
-    let isEditingExistingRemote: Bool
+    var isEditingExistingRemote: Bool { draft.id != nil }
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init(draft: RemoteDraft) {
         self.draft = draft
-        self.isEditingExistingRemote = draft.id != nil
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
-    func save(using remotesViewModel: RemotesViewModel) -> UUID? {
-        isSaving = true
-        defer { isSaving = false }
-        testResultMessage = nil
-        testResultIsSuccess = false
-
-        if draft.id == nil {
-            draft.id = UUID()
+    /// This is async: it can suspend and resume later without blocking a thread.
+    func save(using remotesViewModel: RemotesViewModel) async -> Result<UUID, AppError> {
+        guard !isSaving else {
+            if !validationErrors.isEmpty {
+                return .failure(.validationFailed(validationErrors))
+            }
+            return .failure(.unknown("Save is already in progress."))
         }
 
-        validationErrors = remotesViewModel.saveDraft(draft)
-        return validationErrors.isEmpty ? draft.id : nil
+        isSaving = true
+        defer { isSaving = false }
+        clearTestResult()
+
+        let draftSnapshot = draft
+        await Task.yield()
+
+        let resolvedID = draftSnapshot.id ?? UUID()
+        var draftForSave = draftSnapshot
+        draftForSave.id = resolvedID
+
+        let errors = remotesViewModel.saveDraft(draftForSave)
+        validationErrors = errors
+
+        if errors.isEmpty {
+            draft.id = resolvedID
+            return .success(resolvedID)
+        }
+
+        return .failure(.validationFailed(errors))
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -57,8 +80,19 @@ final class RemoteEditorViewModel: ObservableObject {
             testResultMessage = message
             testResultIsSuccess = true
         case .failure(let error):
+            validationErrors = []
             testResultMessage = error.localizedDescription
             testResultIsSuccess = false
         }
+    }
+
+    private func clearTestResult() {
+        testResultMessage = nil
+        testResultIsSuccess = false
+    }
+
+    private func clearDraftFeedback() {
+        validationErrors = []
+        clearTestResult()
     }
 }

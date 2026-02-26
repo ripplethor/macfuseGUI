@@ -16,6 +16,7 @@ actor RemoteBrowserSessionManager {
     private let breakerThreshold: Int
     private let breakerWindow: TimeInterval
     private var sessions: [RemoteBrowserSessionID: LibSSH2SessionActor] = [:]
+    private var sessionRemoteIDs: [RemoteBrowserSessionID: UUID] = [:]
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init(
@@ -31,7 +32,25 @@ actor RemoteBrowserSessionManager {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
-    func openSession(remote: RemoteConfig, password: String?) -> RemoteBrowserSessionID {
+    func openSession(remote: RemoteConfig, password: String?) async -> RemoteBrowserSessionID {
+        let existingSessionIDs = sessionRemoteIDs.compactMap { sessionID, remoteID in
+            remoteID == remote.id ? sessionID : nil
+        }
+
+        for existingSessionID in existingSessionIDs {
+            sessionRemoteIDs.removeValue(forKey: existingSessionID)
+            guard let existingSession = sessions.removeValue(forKey: existingSessionID) else {
+                continue
+            }
+            // Ensure one browser session per remote so actor/session state cannot diverge.
+            await existingSession.close()
+            diagnostics.append(
+                level: .info,
+                category: "remote-browser",
+                message: "Replaced browser session \(existingSessionID.uuidString) for \(remote.displayName)"
+            )
+        }
+
         let sessionID = UUID()
         let session = LibSSH2SessionActor(
             id: sessionID,
@@ -43,6 +62,7 @@ actor RemoteBrowserSessionManager {
             breakerWindow: breakerWindow
         )
         sessions[sessionID] = session
+        sessionRemoteIDs[sessionID] = remote.id
         diagnostics.append(
             level: .info,
             category: "remote-browser",
@@ -54,9 +74,16 @@ actor RemoteBrowserSessionManager {
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This is async: it can suspend and resume later without blocking a thread.
     func closeSession(_ sessionID: RemoteBrowserSessionID) async {
+        sessionRemoteIDs.removeValue(forKey: sessionID)
         guard let session = sessions.removeValue(forKey: sessionID) else {
             return
         }
+        diagnostics.append(
+            level: .debug,
+            category: "remote-browser",
+            message: "Closing browser session \(sessionID.uuidString)"
+        )
+        // Remove first so concurrent callers immediately observe this session as closed.
         await session.close()
     }
 
@@ -80,9 +107,13 @@ actor RemoteBrowserSessionManager {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This is async: it can suspend and resume later without blocking a thread.
-    func retryCurrentPath(sessionID: RemoteBrowserSessionID, requestID: UInt64) async -> RemoteBrowserSnapshot {
+    func retryCurrentPath(
+        sessionID: RemoteBrowserSessionID,
+        lastKnownPath: String,
+        requestID: UInt64
+    ) async -> RemoteBrowserSnapshot {
         guard let session = sessions[sessionID] else {
-            return missingSessionSnapshot(path: "/", requestID: requestID)
+            return missingSessionSnapshot(path: lastKnownPath, requestID: requestID)
         }
         return await session.retryCurrentPath(requestID: requestID)
     }
@@ -91,14 +122,7 @@ actor RemoteBrowserSessionManager {
     /// This is async: it can suspend and resume later without blocking a thread.
     func health(sessionID: RemoteBrowserSessionID) async -> BrowserConnectionHealth {
         guard let session = sessions[sessionID] else {
-            return BrowserConnectionHealth(
-                state: .closed,
-                retryCount: 0,
-                lastError: "Session not found",
-                lastSuccessAt: nil,
-                lastLatencyMs: nil,
-                updatedAt: Date()
-            )
+            return missingSessionHealth()
         }
         return await session.currentHealth()
     }
@@ -106,14 +130,26 @@ actor RemoteBrowserSessionManager {
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This is async: it can suspend and resume later without blocking a thread.
     func sessionsSummary() async -> String {
-        if sessions.isEmpty {
+        let sessionPairs = sessions.map { ($0.key, $0.value) }
+        if sessionPairs.isEmpty {
             return "- none"
         }
-        var lines: [String] = []
-        for (id, session) in sessions {
-            let line = await session.summaryLine()
-            lines.append(line.isEmpty ? "- session=\(id.uuidString)" : line)
+
+        let lines = await withTaskGroup(of: String.self, returning: [String].self) { group in
+            for (id, session) in sessionPairs {
+                group.addTask {
+                    let line = await session.summaryLine()
+                    return line.isEmpty ? "- session=\(id.uuidString)" : line
+                }
+            }
+
+            var collected: [String] = []
+            for await line in group {
+                collected.append(line)
+            }
+            return collected
         }
+
         return lines.sorted().joined(separator: "\n")
     }
 
@@ -123,21 +159,28 @@ actor RemoteBrowserSessionManager {
         return RemoteBrowserSnapshot(
             path: normalized,
             entries: [],
+            // Missing session means current data is non-fresh.
             isStale: true,
             isConfirmedEmpty: false,
-            health: BrowserConnectionHealth(
-                state: .closed,
-                retryCount: 0,
-                lastError: "Browser session closed",
-                lastSuccessAt: nil,
-                lastLatencyMs: nil,
-                updatedAt: Date()
-            ),
+            health: missingSessionHealth(),
             message: "Browser session closed. Re-open the browser.",
             generatedAt: Date(),
+            // No cached entries are returned for missing-session snapshots.
             fromCache: false,
             requestID: requestID,
             latencyMs: 0
+        )
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    private func missingSessionHealth() -> BrowserConnectionHealth {
+        BrowserConnectionHealth(
+            state: .closed,
+            retryCount: 0,
+            lastError: "Browser session closed",
+            lastSuccessAt: nil,
+            lastLatencyMs: nil,
+            updatedAt: Date()
         )
     }
 }

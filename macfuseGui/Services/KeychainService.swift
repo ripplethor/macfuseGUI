@@ -61,15 +61,15 @@ final class KeychainService: KeychainServiceProtocol {
         guard password.data(using: .utf8) != nil else {
             throw AppError.keychainError("Failed to convert password to data")
         }
-        cachePassword(password, for: remoteID)
 
-        aggregateLock.lock()
-        defer { aggregateLock.unlock() }
-        var aggregate = try readAggregatePasswordMap(allowUserInteraction: false) ?? [:]
-        if aggregate[remoteID] != password {
-            aggregate[remoteID] = password
-            try upsertAggregatePasswordMap(aggregate, allowUserInteraction: true)
+        try withAggregateLock {
+            var aggregate = try readAggregatePasswordMap(allowUserInteraction: false) ?? [:]
+            if aggregate[remoteID] != password {
+                aggregate[remoteID] = password
+                try upsertAggregatePasswordMap(aggregate, allowUserInteraction: true)
+            }
         }
+        cachePassword(password, for: remoteID)
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -85,9 +85,17 @@ final class KeychainService: KeychainServiceProtocol {
         if let cached = cachedPassword(for: remoteID) {
             return cached
         }
-        if let aggregate = try readAggregatePasswordMap(allowUserInteraction: allowUserInteraction),
-           let stored = aggregate[remoteID],
-           !stored.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+
+        let stored: String? = try withAggregateLock { () throws -> String? in
+            guard let aggregate = try readAggregatePasswordMap(allowUserInteraction: allowUserInteraction),
+                  let stored = aggregate[remoteID] else {
+                return nil
+            }
+            let trimmed = stored.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : stored
+        }
+
+        if let stored {
             cachePassword(stored, for: remoteID)
             return stored
         }
@@ -98,18 +106,17 @@ final class KeychainService: KeychainServiceProtocol {
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This can throw an error: callers should use do/try/catch or propagate the error.
     func deletePassword(remoteID: String) throws {
-        clearCachedPassword(for: remoteID)
-
-        aggregateLock.lock()
-        defer { aggregateLock.unlock() }
-        if var aggregate = try readAggregatePasswordMap(allowUserInteraction: false) {
-            aggregate.removeValue(forKey: remoteID)
-            if aggregate.isEmpty {
-                _ = deleteAggregateStatus()
-            } else {
-                try upsertAggregatePasswordMap(aggregate, allowUserInteraction: false)
+        try withAggregateLock {
+            if var aggregate = try readAggregatePasswordMap(allowUserInteraction: false) {
+                aggregate.removeValue(forKey: remoteID)
+                if aggregate.isEmpty {
+                    try deleteAggregate()
+                } else {
+                    try upsertAggregatePasswordMap(aggregate, allowUserInteraction: false)
+                }
             }
         }
+        clearCachedPassword(for: remoteID)
     }
 
     private func readAggregatePasswordMap(allowUserInteraction: Bool) throws -> [String: String]? {
@@ -149,7 +156,6 @@ final class KeychainService: KeychainServiceProtocol {
 
     private func upsertAggregateData(_ data: Data, allowUserInteraction: Bool) throws {
         let query = aggregateQuery()
-        let lookupQuery = authenticationScopedQuery(query, allowUserInteraction: allowUserInteraction)
         let updateQuery = authenticationScopedQuery(query, allowUserInteraction: allowUserInteraction)
         let updateAttributes: [String: Any] = [
             kSecValueData as String: data
@@ -159,62 +165,32 @@ final class KeychainService: KeychainServiceProtocol {
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
 
-        let status = SecItemCopyMatching(lookupQuery as CFDictionary, nil)
-        if status == errSecSuccess {
+        var insert = query
+        insert.merge(insertAttributes) { current, _ in current }
+        let insertQuery = authenticationScopedQuery(insert, allowUserInteraction: allowUserInteraction) as CFDictionary
+
+        let insertStatus = SecItemAdd(insertQuery, nil)
+        if insertStatus == errSecSuccess {
+            return
+        }
+        if insertStatus == errSecDuplicateItem {
             let updateStatus = SecItemUpdate(updateQuery as CFDictionary, updateAttributes as CFDictionary)
             guard updateStatus == errSecSuccess else {
                 throw AppError.keychainError("Failed to update keychain item (\(updateStatus))")
             }
             return
         }
-        if status == errSecItemNotFound {
-            var insert = query
-            insert.merge(insertAttributes) { current, _ in current }
-            let insertQuery = authenticationScopedQuery(insert, allowUserInteraction: allowUserInteraction) as CFDictionary
-
-            let insertStatus = SecItemAdd(insertQuery, nil)
-            guard insertStatus == errSecSuccess else {
-                if insertStatus == errSecDuplicateItem {
-                    let updateStatus = SecItemUpdate(updateQuery as CFDictionary, updateAttributes as CFDictionary)
-                    guard updateStatus == errSecSuccess else {
-                        throw AppError.keychainError("Failed to update keychain item (\(updateStatus))")
-                    }
-                    return
-                }
-                throw AppError.keychainError("Failed to add keychain item (\(insertStatus))")
-            }
-            return
+        if insertStatus == errSecInteractionNotAllowed {
+            throw AppError.keychainError("Keychain is locked. Unlock macOS and retry.")
         }
-        if status == errSecInteractionNotAllowed {
-            let insertQueryDictionary: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: aggregateServiceName,
-                kSecAttrAccount as String: aggregateAccountName,
-                kSecValueData as String: data,
-                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-            ]
-            let insertQuery = authenticationScopedQuery(
-                insertQueryDictionary,
-                allowUserInteraction: allowUserInteraction
-            )
-            let insertStatus = SecItemAdd(insertQuery as CFDictionary, nil)
-            if insertStatus == errSecSuccess {
-                return
-            }
-            if insertStatus == errSecDuplicateItem {
-                let updateStatus = SecItemUpdate(updateQuery as CFDictionary, updateAttributes as CFDictionary)
-                guard updateStatus == errSecSuccess else {
-                    throw AppError.keychainError("Failed to update keychain item (\(updateStatus))")
-                }
-                return
-            }
-            throw AppError.keychainError("Failed to add keychain item (\(insertStatus))")
-        }
-        throw AppError.keychainError("Failed to query keychain (\(status))")
+        throw AppError.keychainError("Failed to add keychain item (\(insertStatus))")
     }
 
-    private func deleteAggregateStatus() -> OSStatus {
-        SecItemDelete(authenticationScopedQuery(aggregateQuery(), allowUserInteraction: false) as CFDictionary)
+    private func deleteAggregate() throws {
+        let status = SecItemDelete(authenticationScopedQuery(aggregateQuery(), allowUserInteraction: false) as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw AppError.keychainError("Failed to delete keychain item (\(status))")
+        }
     }
 
     private func aggregateQuery() -> [String: Any] {
@@ -234,6 +210,12 @@ final class KeychainService: KeychainServiceProtocol {
         context.interactionNotAllowed = !allowUserInteraction
         query[kSecUseAuthenticationContext as String] = context
         return query
+    }
+
+    private func withAggregateLock<T>(_ body: () throws -> T) throws -> T {
+        aggregateLock.lock()
+        defer { aggregateLock.unlock() }
+        return try body()
     }
 
     private func cachedPassword(for remoteID: String) -> String? {

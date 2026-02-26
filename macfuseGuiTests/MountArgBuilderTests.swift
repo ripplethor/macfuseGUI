@@ -86,4 +86,92 @@ final class MountArgBuilderTests: XCTestCase {
         XCTAssertTrue(command.arguments.contains("philip@192.168.1.55:/C:/Users/philip"))
         XCTAssertTrue(command.arguments.joined(separator: " ").contains("volname=Windows Host - philip"))
     }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func testBuildEscapesCommaInIdentityFileAndUsesPerOptionFlags() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        let remote = RemoteConfig(
+            displayName: "Server",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .privateKey,
+            privateKeyPath: "/Users/dev/.ssh/id,ed25519",
+            remoteDirectory: "/srv",
+            localMountPoint: "/Volumes/server"
+        )
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
+        let optionFlagCount = command.arguments.filter { $0 == "-o" }.count
+
+        XCTAssertEqual(optionFlagCount, 11)
+        XCTAssertTrue(command.arguments.contains("IdentityFile=/Users/dev/.ssh/id\\,ed25519"))
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func testFallbackVolumeNameIncludesUniqueSeedWhenDisplayAndHostAreNonAscii() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        let remote = RemoteConfig(
+            displayName: "",
+            host: "服务器",
+            port: 2222,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: nil,
+            remoteDirectory: "/",
+            localMountPoint: "/Volumes/server"
+        )
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
+        let volumeOption = command.arguments.first { $0.hasPrefix("volname=") }
+
+        XCTAssertNotNil(volumeOption)
+        XCTAssertNotEqual(volumeOption, "volname=macfuseGui")
+    }
+}
+
+/// Beginner note: This type groups related state and behavior for one part of the app.
+/// Read stored properties first, then follow methods top-to-bottom to understand flow.
+final class RedactionServiceTests: XCTestCase {
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func testRedactPrefersLongerSecretsBeforeSubstrings() {
+        let service = RedactionService()
+
+        let result = service.redact("token=mypassword", secrets: ["pass", "mypassword"])
+
+        XCTAssertEqual(result, "token=<redacted>")
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func testRedactDoesNotCorruptReplacementWhenOtherSecretsMatchTokenText() {
+        let service = RedactionService()
+
+        let result = service.redact("token=abc", secrets: ["abc", "redact"])
+
+        XCTAssertEqual(result, "token=<redacted>")
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func testRedactedCommandRedactsBeforeDisplayQuoting() {
+        let service = RedactionService()
+
+        let command = service.redactedCommand(
+            executable: "/bin/echo",
+            arguments: ["pa\"ss", "ok"],
+            secrets: ["pa\"ss"]
+        )
+
+        XCTAssertTrue(command.contains("<redacted>"))
+        XCTAssertFalse(command.contains("pa\\\"ss"))
+        XCTAssertFalse(command.contains("pa\"ss"))
+    }
+
+    /// Beginner note: Redaction is literal and case-sensitive by design.
+    func testRedactionRemainsCaseSensitive() {
+        let service = RedactionService()
+
+        let result = service.redact("token=MyPass123", secrets: ["mypass123"])
+
+        XCTAssertEqual(result, "token=MyPass123")
+    }
 }

@@ -13,7 +13,7 @@ import SwiftUI
 struct RemotesListView: View {
     let remotes: [RemoteConfig]
     let statuses: [UUID: RemoteStatus]
-    let badgeStateForRemote: (UUID) -> String
+    let badgeStateForRemote: (UUID) -> RemoteStatusBadgeState
     @Binding var selectedRemoteID: UUID?
     let onConnect: (UUID) -> Void
     let onDisconnect: (UUID) -> Void
@@ -28,10 +28,10 @@ struct RemotesListView: View {
                 }
             }
             .listStyle(.inset(alternatesRowBackgrounds: true))
-            .onChange(of: selectedRemoteID) { _ in
+            .onValueChange(of: selectedRemoteID) {
                 scrollSelectionToTop(using: scrollProxy)
             }
-            .onChange(of: remotes.map(\.id)) { _ in
+            .onValueChange(of: remotes) {
                 scrollSelectionToTop(using: scrollProxy)
             }
         }
@@ -40,14 +40,14 @@ struct RemotesListView: View {
     @ViewBuilder
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func row(_ remote: RemoteConfig) -> some View {
-        let status = statuses[remote.id] ?? .disconnected
+        let status = status(for: remote.id)
 
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(remote.displayName)
                     .font(.headline)
                 Spacer()
-                StatusBadgeView(stateRawValue: badgeStateForRemote(remote.id))
+                StatusBadgeView(state: badgeStateForRemote(remote.id))
             }
 
             Text("\(remote.username)@\(remote.host):\(remote.port)")
@@ -69,18 +69,17 @@ struct RemotesListView: View {
             }
 
             HStack(spacing: 10) {
-                let canConnect = status.state == .disconnected || status.state == .error || status.state == .disconnecting
-                let canDisconnect = status.state == .connected || status.state == .connecting
-
                 Button("Connect") {
                     onConnect(remote.id)
                 }
-                .disabled(!canConnect)
+                .disabled(!status.canConnect)
+                .accessibilityLabel("Connect to \(remote.displayName)")
 
                 Button("Disconnect") {
                     onDisconnect(remote.id)
                 }
-                .disabled(!canDisconnect)
+                .disabled(!status.canDisconnect)
+                .accessibilityLabel("Disconnect from \(remote.displayName)")
             }
         }
         .padding(.vertical, 6)
@@ -88,18 +87,7 @@ struct RemotesListView: View {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func shortError(_ message: String) -> String {
-        let collapsed = message
-            .replacingOccurrences(of: "\n", with: " ")
-            .replacingOccurrences(of: "\t", with: " ")
-            .replacingOccurrences(of: "  ", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if collapsed.count <= 180 {
-            return collapsed
-        }
-
-        let prefix = collapsed.prefix(180)
-        return "\(prefix)…"
+        message.collapsedAndTruncatedForDisplay(limit: 180)
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -108,9 +96,30 @@ struct RemotesListView: View {
             return
         }
 
-        DispatchQueue.main.async {
-            withAnimation(.easeInOut(duration: 0.18)) {
-                scrollProxy.scrollTo(selectedRemoteID, anchor: .top)
+        withAnimation(.easeInOut(duration: 0.18)) {
+            scrollProxy.scrollTo(selectedRemoteID, anchor: .top)
+        }
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    private func status(for remoteID: UUID) -> RemoteStatus {
+        statuses[remoteID] ?? .initial
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func onValueChange<Value: Equatable>(
+        of value: Value,
+        perform action: @escaping () -> Void
+    ) -> some View {
+        if #available(macOS 14.0, *) {
+            onChange(of: value) { _, _ in
+                action()
+            }
+        } else {
+            onChange(of: value) { _ in
+                action()
             }
         }
     }

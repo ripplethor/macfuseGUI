@@ -11,40 +11,76 @@ import SwiftUI
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 struct StatusBadgeView: View {
-    private let statusLabel: String
-    private let color: Color
+    private let state: RemoteStatusBadgeState
 
     /// Beginner note: Initializers create valid state before any other method is used.
+    init(state: RemoteStatusBadgeState) {
+        self.state = state
+    }
+
+    /// Beginner note: This initializer is compatibility-only.
+    @available(*, deprecated, message: "Prefer init(state:) for compile-time safety.")
     init(stateRawValue: String) {
-        switch stateRawValue {
-        case "connected":
-            statusLabel = "Connected"
-            color = .green
-        case "reconnecting":
-            statusLabel = "Re-connecting"
-            color = .orange
-        case "connecting":
-            statusLabel = "Connecting"
-            color = .orange
-        case "disconnecting":
-            statusLabel = "Disconnecting"
-            color = .orange
-        case "error":
-            statusLabel = "Error"
-            color = .red
-        default:
-            statusLabel = "Disconnected"
-            color = .secondary
+        if let state = RemoteStatusBadgeState(rawValue: stateRawValue) {
+            self.state = state
+        } else {
+            assertionFailure("Unknown status badge state raw value: \(stateRawValue)")
+            self.state = .disconnected
         }
     }
 
     var body: some View {
-        Text(statusLabel)
+        Text(state.displayLabel)
             .font(.caption)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(color.opacity(0.18))
-            .foregroundStyle(color)
+            .background(state.badgeColor.opacity(0.18))
+            .foregroundStyle(state.badgeColor)
             .clipShape(Capsule())
+            .accessibilityLabel("Status: \(state.displayLabel)")
     }
+}
+
+private extension RemoteStatusBadgeState {
+    var displayLabel: String {
+        switch self {
+        case .connected:
+            return "Connected"
+        case .reconnecting:
+            return "Reconnecting"
+        case .connecting:
+            return "Connecting"
+        case .disconnecting:
+            return "Disconnecting"
+        case .error:
+            return "Error"
+        case .disconnected:
+            return "Disconnected"
+        }
+    }
+
+    var badgeColor: Color {
+        switch self {
+        case .connected:
+            return .green
+        case .reconnecting, .connecting, .disconnecting:
+            return .orange
+        case .error:
+            return .red
+        case .disconnected:
+            return .secondary
+        }
+    }
+}
+
+#Preview {
+    VStack(alignment: .leading, spacing: 8) {
+        StatusBadgeView(state: .connected)
+        StatusBadgeView(state: .connecting)
+        StatusBadgeView(state: .reconnecting)
+        StatusBadgeView(state: .disconnecting)
+        StatusBadgeView(state: .error)
+        StatusBadgeView(state: .disconnected)
+    }
+    .padding()
 }

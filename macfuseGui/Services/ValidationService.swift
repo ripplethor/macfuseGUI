@@ -24,6 +24,8 @@ final class ValidationService {
         hasStoredPassword: Bool
     ) -> [String] {
         var errors: [String] = []
+        // Validation checks trimmed field views; persistence normalization occurs when
+        // RemoteDraft is converted to RemoteConfig in the save path.
 
         let displayName = draft.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         if displayName.isEmpty {
@@ -34,10 +36,12 @@ final class ValidationService {
         if host.isEmpty {
             errors.append("Host/IP is required.")
         } else {
-            if !isSupportedHost(host) {
-                errors.append("Host/IP contains unsupported characters.")
-            } else if containsUnsafeControlCharacters(host) {
+            if containsUnsafeControlCharacters(host) {
                 errors.append("Host/IP contains invalid control characters.")
+            } else if !isSupportedHost(host) {
+                // Host syntax is intentionally permissive here (for example IPv6-like forms).
+                // Exact address validity is enforced by downstream connect calls.
+                errors.append("Host/IP contains unsupported characters.")
             }
         }
 
@@ -87,6 +91,9 @@ final class ValidationService {
             } else if containsUnsafeControlCharacters(keyPath) {
                 errors.append("Private key path contains invalid control characters.")
             } else {
+                // This is a shallow readability/existence check at validation time only.
+                // Runtime key accessibility (for example removable/network-backed symlink targets)
+                // is still validated by connect/auth flows.
                 var isDir: ObjCBool = false
                 if !fileManager.fileExists(atPath: keyPath, isDirectory: &isDir) || isDir.boolValue {
                     errors.append("Private key file does not exist.")
@@ -113,7 +120,7 @@ final class ValidationService {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func isSupportedRemotePath(_ value: String) -> Bool {
-        if value.hasPrefix("/") || value.hasPrefix("~") {
+        if value.hasPrefix("/") || value == "~" || value.hasPrefix("~/") {
             return true
         }
 

@@ -60,8 +60,7 @@ struct RemoteBrowserView: View {
     let onCancel: () -> Void
     private let columnWidthStore: any BrowserColumnWidthStoring
 
-    // didLoad prevents duplicate initial load when SwiftUI re-evaluates the view body.
-    @State private var didLoad = false
+    @State private var closeSessionTask: Task<Void, Never>?
     // Persisted table widths keep user layout preference across sessions.
     @State private var nameColumnWidth: CGFloat
     @State private var dateColumnWidth: CGFloat
@@ -97,20 +96,30 @@ struct RemoteBrowserView: View {
         }
         .frame(minWidth: 980, minHeight: 640)
         .task {
-            guard !didLoad else {
-                return
-            }
-            didLoad = true
             // Initial data fetch is async; UI stays responsive while loading.
             await viewModel.loadInitial()
         }
+        .onAppear {
+            closeSessionTask?.cancel()
+            closeSessionTask = nil
+        }
+        .onChange(of: nameColumnWidth) { value in
+            columnWidthStore.setWidth(value, for: .name)
+        }
+        .onChange(of: dateColumnWidth) { value in
+            columnWidthStore.setWidth(value, for: .date)
+        }
+        .onChange(of: kindColumnWidth) { value in
+            columnWidthStore.setWidth(value, for: .kind)
+        }
+        .onChange(of: sizeColumnWidth) { value in
+            columnWidthStore.setWidth(value, for: .size)
+        }
         .onDisappear {
             // Close remote browser session on sheet close to release transport resources.
-            Task { await viewModel.closeSession() }
+            closeSessionTask?.cancel()
+            closeSessionTask = Task { await viewModel.closeSession() }
             persistColumnWidths()
-        }
-        .onDeleteCommand {
-            Task { await viewModel.goUp() }
         }
     }
 
@@ -210,7 +219,7 @@ struct RemoteBrowserView: View {
 
     @ViewBuilder
     private var reconnectBanner: some View {
-        if viewModel.isRecovering || viewModel.viewState == .degradedWithCache {
+        if !viewModel.shouldShowDegradedNoDataState && (viewModel.isRecovering || viewModel.viewState == .degradedWithCache) {
             HStack(spacing: 8) {
                 Image(systemName: "wifi.exclamationmark")
                 Text(viewModel.statusMessage ?? "Connection lost. Reconnecting…")
@@ -247,7 +256,7 @@ struct RemoteBrowserView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(nsColor: .textBackgroundColor))
-        } else if (viewModel.viewState == .recovering || viewModel.viewState == .degradedWithCache || viewModel.viewState == .fatal), !viewModel.hasVisibleData {
+        } else if viewModel.shouldShowDegradedNoDataState {
             // No data to show and degraded/failure state: actionable retry panel.
             VStack(spacing: 10) {
                 Image(systemName: "wifi.exclamationmark")
@@ -301,7 +310,8 @@ struct RemoteBrowserView: View {
     }
 
     private var bottomBar: some View {
-        HStack(spacing: 10) {
+        let selected = selectedEntry
+        return HStack(spacing: 10) {
             Text(viewModel.itemCountText)
                 .foregroundStyle(.secondary)
             Divider()
@@ -331,11 +341,11 @@ struct RemoteBrowserView: View {
             .keyboardShortcut(.delete, modifiers: [])
 
             Button("Open") {
-                if let selected = selectedEntry {
+                if let selected {
                     Task { await viewModel.open(selected) }
                 }
             }
-            .disabled(selectedEntry == nil)
+            .disabled(selected == nil)
             .keyboardShortcut(.return, modifiers: [])
 
             Button("Select") {
@@ -390,7 +400,6 @@ struct RemoteBrowserView: View {
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter

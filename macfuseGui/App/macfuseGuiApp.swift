@@ -8,13 +8,15 @@
 
 import SwiftUI
 
+/// Beginner note: Entry point for the menu-bar app. AppDelegate owns lifecycle,
+/// menu bar UI, and termination cleanup behavior.
 @main
-/// Beginner note: This type groups related state and behavior for one part of the app.
-/// Read stored properties first, then follow methods top-to-bottom to understand flow.
-struct macfuseGuiApp: App {
+struct MacFuseGUIApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
+        // Keep an empty Settings scene so SwiftUI does not create a default app window.
+        // Quit and mount teardown behavior is coordinated by AppDelegate.
         Settings {
             EmptyView()
         }

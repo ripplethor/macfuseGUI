@@ -21,11 +21,21 @@ import Foundation
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 actor LibSSH2SessionActor {
+    private static let recoveryRequestID: UInt64 = 0
+
     /// Beginner note: This type groups related state and behavior for one part of the app.
     /// Read stored properties first, then follow methods top-to-bottom to understand flow.
     private struct LastSuccessfulListing {
         var path: String
         var entries: [RemoteDirectoryItem]
+    }
+
+    /// Beginner note: Cache lookup can fall back to a different path when the requested
+    /// path has no cached data. Keep source metadata for diagnostics.
+    private struct CachedEntrySource {
+        var entries: [RemoteDirectoryItem]
+        var fromCache: Bool
+        var sourcePath: String?
     }
 
     private let id: RemoteBrowserSessionID
@@ -93,16 +103,14 @@ actor LibSSH2SessionActor {
             updatedAt: Date()
         )
 
-        Task { [weak self] in
-            guard let self else {
-                return
-            }
+        Task {
             // Keepalive starts once and stays active for the session lifetime.
             await self.startKeepAlive()
         }
     }
 
-    /// Beginner note: Deinitializer runs during teardown to stop background work and free resources.
+    /// Beginner note: Callers should always invoke close() for deterministic shutdown.
+    /// Deinit is only a best-effort safety net.
     deinit {
         keepAliveTask?.cancel()
         recoveryTask?.cancel()
@@ -111,6 +119,8 @@ actor LibSSH2SessionActor {
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This is async: it can suspend and resume later without blocking a thread.
     func close() async {
+        // close() is the primary lifecycle API for sessions; callers should not
+        // rely on deinit timing for transport/task cleanup.
         closed = true
         keepAliveTask?.cancel()
         keepAliveTask = nil
@@ -139,10 +149,18 @@ actor LibSSH2SessionActor {
     func list(path: String, requestID: UInt64, forceRefresh: Bool = false) async -> RemoteBrowserSnapshot {
         let normalizedPath = BrowserPathNormalizer.normalize(path: path)
         lastPath = normalizedPath
+        resetBreakerIfExpired()
 
         // Used by keepalive to avoid ping/list contention on the same session.
         activeListRequests += 1
-        defer { activeListRequests = max(0, activeListRequests - 1) }
+        defer {
+            assert(activeListRequests > 0, "activeListRequests underflow in list(path:requestID:forceRefresh:)")
+            if activeListRequests > 0 {
+                activeListRequests -= 1
+            } else {
+                activeListRequests = 0
+            }
+        }
 
         if closed {
             return makeSnapshot(
@@ -162,6 +180,11 @@ actor LibSSH2SessionActor {
             // Circuit-open state means repeated failures in a short window.
             // We return cached content immediately and let recovery run in background.
             let cached = cachedEntries(preferredPath: normalizedPath)
+            logOffPathCacheFallbackIfNeeded(
+                cached: cached,
+                preferredPath: normalizedPath,
+                context: "circuit-open"
+            )
             let snapshot = makeSnapshot(
                 path: normalizedPath,
                 entries: cached.entries,
@@ -259,10 +282,7 @@ actor LibSSH2SessionActor {
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func startKeepAlive() {
         keepAliveTask?.cancel()
-        keepAliveTask = Task { [weak self] in
-            guard let self else {
-                return
-            }
+        keepAliveTask = Task {
             await self.keepAliveLoop()
         }
     }
@@ -299,6 +319,21 @@ actor LibSSH2SessionActor {
 
         do {
             try await transport.ping(remote: remote, path: lastPath, password: password)
+            if consecutiveFailures > 0 || breakerOpenedAt != nil {
+                consecutiveFailures = 0
+                breakerOpenedAt = nil
+                setHealth(
+                    state: .healthy,
+                    retryCount: 0,
+                    lastError: nil,
+                    preserveLastSuccess: true
+                )
+                diagnostics.append(
+                    level: .info,
+                    category: "remote-browser",
+                    message: "keepalive recovered session=\(id.uuidString) path=\(lastPath)"
+                )
+            }
         } catch {
             setHealth(
                 state: .reconnecting,
@@ -323,7 +358,7 @@ actor LibSSH2SessionActor {
         recoveryContext: Bool
     ) async -> RemoteBrowserSnapshot {
         let effectivePath = BrowserPathNormalizer.normalize(path: result.resolvedPath)
-        let pathKey = effectivePath.lowercased()
+        let pathKey = effectivePath
         let cachedForPath = cache[effectivePath] ?? []
 
         if result.entries.isEmpty {
@@ -357,7 +392,7 @@ actor LibSSH2SessionActor {
             do {
                 let confirmation = try await transport.listDirectories(remote: remote, path: effectivePath, password: password)
                 let confirmedPath = BrowserPathNormalizer.normalize(path: confirmation.resolvedPath)
-                let confirmedKey = confirmedPath.lowercased()
+                let confirmedKey = confirmedPath
 
                 if !confirmation.entries.isEmpty {
                     // Confirmation disagreed with first response, so treat as non-empty success.
@@ -382,6 +417,11 @@ actor LibSSH2SessionActor {
             } catch {
                 // Could not confirm emptiness; stay on cached or degraded view and recover.
                 let fallback = cachedEntries(preferredPath: effectivePath)
+                logOffPathCacheFallbackIfNeeded(
+                    cached: fallback,
+                    preferredPath: effectivePath,
+                    context: "empty-confirm-failed"
+                )
                 consecutiveFailures += 1
                 if consecutiveFailures >= breakerThreshold {
                     breakerOpenedAt = Date()
@@ -479,6 +519,11 @@ actor LibSSH2SessionActor {
         }
 
         let cached = cachedEntries(preferredPath: path)
+        logOffPathCacheFallbackIfNeeded(
+            cached: cached,
+            preferredPath: path,
+            context: "list-failure"
+        )
         if !cached.entries.isEmpty {
             // Primary UX rule: keep last good data visible while reconnecting.
             return makeSnapshot(
@@ -530,12 +575,8 @@ actor LibSSH2SessionActor {
             message: "recovery scheduled session=\(id.uuidString) reason=\(reason) path=\(normalizedPath)"
         )
 
-        recoveryTask?.cancel()
-        // Always replace older recovery task with newest reason/path context.
-        recoveryTask = Task { [weak self] in
-            guard let self else {
-                return
-            }
+        // Only one recovery loop is allowed at a time.
+        recoveryTask = Task {
             await self.runRecoveryLoop(path: normalizedPath)
         }
     }
@@ -580,7 +621,7 @@ actor LibSSH2SessionActor {
                 let result = try await transport.listDirectories(remote: remote, path: path, password: password)
                 let snapshot = await applyListResult(
                     result,
-                    requestID: UInt64.max,
+                    requestID: Self.recoveryRequestID,
                     recoveryContext: true
                 )
 
@@ -618,38 +659,65 @@ actor LibSSH2SessionActor {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
-    private func cachedEntries(preferredPath: String) -> (entries: [RemoteDirectoryItem], fromCache: Bool) {
+    private func cachedEntries(preferredPath: String) -> CachedEntrySource {
         // Cache lookup order:
         // 1) Exact requested path
         // 2) Last browsed path
         // 3) Last successful listing from any path
         if let exact = cache[preferredPath], !exact.isEmpty {
-            return (exact, true)
+            return CachedEntrySource(entries: exact, fromCache: true, sourcePath: preferredPath)
         }
 
         if let lastPathEntries = cache[lastPath], !lastPathEntries.isEmpty {
-            return (lastPathEntries, true)
+            return CachedEntrySource(entries: lastPathEntries, fromCache: true, sourcePath: lastPath)
         }
 
         if let lastSuccessfulListing, !lastSuccessfulListing.entries.isEmpty {
-            return (lastSuccessfulListing.entries, true)
+            return CachedEntrySource(
+                entries: lastSuccessfulListing.entries,
+                fromCache: true,
+                sourcePath: lastSuccessfulListing.path
+            )
         }
 
-        return ([], false)
+        return CachedEntrySource(entries: [], fromCache: false, sourcePath: nil)
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func isCircuitOpen() -> Bool {
-        guard let openedAt = breakerOpenedAt else {
-            return false
-        }
+        breakerOpenedAt != nil
+    }
 
+    /// Beginner note: Keep breaker mutation out of read-style predicates so callers
+    /// can reason about when state changes happen.
+    private func resetBreakerIfExpired() {
+        guard let openedAt = breakerOpenedAt else {
+            return
+        }
         if Date().timeIntervalSince(openedAt) >= breakerWindow {
             breakerOpenedAt = nil
-            return false
+        }
+    }
+
+    /// Beginner note: Returning cached entries from a different path is intentional
+    /// for resiliency, but we log it so diagnostics stay unambiguous.
+    private func logOffPathCacheFallbackIfNeeded(
+        cached: CachedEntrySource,
+        preferredPath: String,
+        context: String
+    ) {
+        guard cached.fromCache,
+              !cached.entries.isEmpty,
+              let sourcePath = cached.sourcePath,
+              sourcePath != preferredPath else {
+            return
         }
 
-        return true
+        diagnostics.append(
+            level: .warning,
+            category: "remote-browser",
+            message: "Using cached entries from \(sourcePath) while serving \(preferredPath) context=\(context) session=\(id.uuidString)"
+        )
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.

@@ -12,7 +12,7 @@ typealias RemoteBrowserSessionID = UUID
 
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
-enum BrowserConnectionState: String, Codable, Sendable {
+enum BrowserConnectionState: String, Sendable {
     case connecting
     case healthy
     case degraded
@@ -24,46 +24,91 @@ enum BrowserConnectionState: String, Codable, Sendable {
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 struct BrowserConnectionHealth: Equatable, Sendable {
-    var state: BrowserConnectionState
-    var retryCount: Int
-    var lastError: String?
-    var lastSuccessAt: Date?
-    var lastLatencyMs: Int?
-    var updatedAt: Date
+    let state: BrowserConnectionState
+    let retryCount: Int
+    let lastError: String?
+    let lastSuccessAt: Date?
+    let lastLatencyMs: Int?
+    let updatedAt: Date
 
-    static let connecting = BrowserConnectionHealth(
-        state: .connecting,
-        retryCount: 0,
-        lastError: nil,
-        lastSuccessAt: nil,
-        lastLatencyMs: nil,
-        updatedAt: Date()
-    )
+    static var connecting: BrowserConnectionHealth {
+        BrowserConnectionHealth(
+            state: .connecting,
+            retryCount: 0,
+            lastError: nil,
+            lastSuccessAt: nil,
+            lastLatencyMs: nil,
+            updatedAt: Date()
+        )
+    }
+
+    /// Structural Equatable includes timestamps. Use this helper for state-only comparisons.
+    func isSemanticallyEquivalent(to other: BrowserConnectionHealth) -> Bool {
+        state == other.state
+            && retryCount == other.retryCount
+            && lastError == other.lastError
+            && lastLatencyMs == other.lastLatencyMs
+    }
 }
 
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 struct RemoteDirectoryItem: Identifiable, Equatable, Sendable {
-    var name: String
-    var fullPath: String
-    var isDirectory: Bool
-    var modifiedAt: Date?
-    var sizeBytes: Int64?
+    let name: String
+    let fullPath: String
+    let isDirectory: Bool
+    let modifiedAt: Date?
+    let sizeBytes: Int64?
 
-    var id: String { fullPath.lowercased() }
+    var id: String { fullPath }
 }
 
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 struct RemoteBrowserSnapshot: Equatable, Sendable {
-    var path: String
-    var entries: [RemoteDirectoryItem]
-    var isStale: Bool
-    var isConfirmedEmpty: Bool
-    var health: BrowserConnectionHealth
-    var message: String?
-    var generatedAt: Date
-    var fromCache: Bool
-    var requestID: UInt64
-    var latencyMs: Int
+    let path: String
+    let entries: [RemoteDirectoryItem]
+    let isStale: Bool
+    let isConfirmedEmpty: Bool
+    let health: BrowserConnectionHealth
+    let message: String?
+    let generatedAt: Date
+    let fromCache: Bool
+    let requestID: UInt64
+    let latencyMs: Int
+
+    init(
+        path: String,
+        entries: [RemoteDirectoryItem],
+        isStale: Bool,
+        isConfirmedEmpty: Bool,
+        health: BrowserConnectionHealth,
+        message: String?,
+        generatedAt: Date,
+        fromCache: Bool,
+        requestID: UInt64,
+        latencyMs: Int
+    ) {
+        self.path = path
+        self.entries = entries
+        self.isStale = isStale
+        self.isConfirmedEmpty = isConfirmedEmpty && entries.isEmpty
+        self.health = health
+        self.message = message
+        self.generatedAt = generatedAt
+        self.fromCache = fromCache
+        self.requestID = requestID
+        self.latencyMs = latencyMs
+    }
+
+    /// Structural Equatable includes timing/request metadata. Use this helper for UI state comparisons.
+    func isSemanticallyEquivalent(to other: RemoteBrowserSnapshot) -> Bool {
+        path == other.path
+            && entries == other.entries
+            && isStale == other.isStale
+            && isConfirmedEmpty == other.isConfirmedEmpty
+            && health.isSemanticallyEquivalent(to: other.health)
+            && message == other.message
+            && fromCache == other.fromCache
+    }
 }

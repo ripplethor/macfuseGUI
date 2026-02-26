@@ -10,7 +10,7 @@ import Foundation
 
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
-struct RemoteConfig: Identifiable, Codable, Equatable, Sendable {
+struct RemoteConfig: Identifiable, Codable, Equatable, Hashable, Sendable {
     var id: UUID
     var displayName: String
     var host: String
@@ -21,8 +21,23 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Sendable {
     var remoteDirectory: String
     var localMountPoint: String
     var autoConnectOnLaunch: Bool
+    // Persisted per-remote path memory; normalization and limits are enforced by RemotesViewModel.
     var favoriteRemoteDirectories: [String]
     var recentRemoteDirectories: [String]
+
+    // Hard caps prevent unbounded persisted growth if callers bypass view-model normalization.
+    static let favoriteDirectoryLimit = 20
+    static let recentDirectoryLimit = 15
+
+    static func cappedPathMemory(_ paths: [String], limit: Int) -> [String] {
+        guard limit > 0 else {
+            return []
+        }
+        guard paths.count > limit else {
+            return paths
+        }
+        return Array(paths.prefix(limit))
+    }
 
     /// Beginner note: This type groups related state and behavior for one part of the app.
     /// Read stored properties first, then follow methods top-to-bottom to understand flow.
@@ -66,11 +81,18 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Sendable {
         self.remoteDirectory = remoteDirectory
         self.localMountPoint = localMountPoint
         self.autoConnectOnLaunch = autoConnectOnLaunch
-        self.favoriteRemoteDirectories = favoriteRemoteDirectories
-        self.recentRemoteDirectories = recentRemoteDirectories
+        self.favoriteRemoteDirectories = Self.cappedPathMemory(
+            favoriteRemoteDirectories,
+            limit: Self.favoriteDirectoryLimit
+        )
+        self.recentRemoteDirectories = Self.cappedPathMemory(
+            recentRemoteDirectories,
+            limit: Self.recentDirectoryLimit
+        )
     }
 
     /// Beginner note: Initializers create valid state before any other method is used.
+    /// Decoder defaults keep older remotes.json files loadable when fields were added later.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
@@ -84,8 +106,10 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Sendable {
         remoteDirectory = try container.decodeIfPresent(String.self, forKey: .remoteDirectory) ?? "/"
         localMountPoint = try container.decodeIfPresent(String.self, forKey: .localMountPoint) ?? ""
         autoConnectOnLaunch = try container.decodeIfPresent(Bool.self, forKey: .autoConnectOnLaunch) ?? false
-        favoriteRemoteDirectories = try container.decodeIfPresent([String].self, forKey: .favoriteRemoteDirectories) ?? []
-        recentRemoteDirectories = try container.decodeIfPresent([String].self, forKey: .recentRemoteDirectories) ?? []
+        let decodedFavorites = try container.decodeIfPresent([String].self, forKey: .favoriteRemoteDirectories) ?? []
+        let decodedRecents = try container.decodeIfPresent([String].self, forKey: .recentRemoteDirectories) ?? []
+        favoriteRemoteDirectories = Self.cappedPathMemory(decodedFavorites, limit: Self.favoriteDirectoryLimit)
+        recentRemoteDirectories = Self.cappedPathMemory(decodedRecents, limit: Self.recentDirectoryLimit)
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -111,7 +135,9 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Sendable {
         host: "example.com",
         username: "dev",
         authMode: .privateKey,
-        privateKeyPath: NSHomeDirectory() + "/.ssh/id_ed25519",
+        privateKeyPath: FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".ssh/id_ed25519")
+            .path,
         remoteDirectory: "/srv/data",
         localMountPoint: "/Volumes/example",
         autoConnectOnLaunch: false,
@@ -130,6 +156,7 @@ struct RemoteDraft: Equatable, Sendable {
     var username: String = ""
     var authMode: RemoteAuth = .privateKey
     var privateKeyPath: String = ""
+    // Transient in-memory value used by editor/test flows. Never persisted to remotes.json.
     var password: String = ""
     var remoteDirectory: String = "/"
     var localMountPoint: String = ""
@@ -139,37 +166,62 @@ struct RemoteDraft: Equatable, Sendable {
 
     static let empty = RemoteDraft()
 
-    /// Beginner note: Initializers create valid state before any other method is used.
-    init(
-        id: UUID? = nil,
-        displayName: String = "",
-        host: String = "",
-        port: Int = 22,
-        username: String = "",
-        authMode: RemoteAuth = .privateKey,
-        privateKeyPath: String = "",
-        password: String = "",
-        remoteDirectory: String = "/",
-        localMountPoint: String = "",
-        autoConnectOnLaunch: Bool = false,
-        favoriteRemoteDirectories: [String] = [],
-        recentRemoteDirectories: [String] = []
-    ) {
-        self.id = id
-        self.displayName = displayName
-        self.host = host
-        self.port = port
-        self.username = username
-        self.authMode = authMode
-        self.privateKeyPath = privateKeyPath
-        self.password = password
-        self.remoteDirectory = remoteDirectory
-        self.localMountPoint = localMountPoint
-        self.autoConnectOnLaunch = autoConnectOnLaunch
-        self.favoriteRemoteDirectories = favoriteRemoteDirectories
-        self.recentRemoteDirectories = recentRemoteDirectories
+    var isValid: Bool {
+        let trimmedDisplayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPrivateKeyPath = privateKeyPath.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedDisplayName.isEmpty,
+              !trimmedHost.isEmpty,
+              !trimmedUsername.isEmpty,
+              (1...65_535).contains(port) else {
+            return false
+        }
+
+        if authMode == .privateKey {
+            return !trimmedPrivateKeyPath.isEmpty
+        }
+
+        return true
     }
 
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func asRemoteConfig() -> RemoteConfig {
+        let trimmedDisplayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPrivateKeyPath = privateKeyPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedRemoteDirectory = remoteDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedLocalMountPoint = localMountPoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        let validatedPort = (1...65_535).contains(port) ? port : 22
+        let cappedFavorites = RemoteConfig.cappedPathMemory(
+            favoriteRemoteDirectories,
+            limit: RemoteConfig.favoriteDirectoryLimit
+        )
+        let cappedRecents = RemoteConfig.cappedPathMemory(
+            recentRemoteDirectories,
+            limit: RemoteConfig.recentDirectoryLimit
+        )
+
+        return RemoteConfig(
+            id: id ?? UUID(),
+            displayName: trimmedDisplayName,
+            host: trimmedHost,
+            port: validatedPort,
+            username: trimmedUsername,
+            authMode: authMode,
+            privateKeyPath: trimmedPrivateKeyPath.isEmpty ? nil : trimmedPrivateKeyPath,
+            remoteDirectory: trimmedRemoteDirectory,
+            localMountPoint: trimmedLocalMountPoint,
+            autoConnectOnLaunch: autoConnectOnLaunch,
+            favoriteRemoteDirectories: cappedFavorites,
+            recentRemoteDirectories: cappedRecents
+        )
+    }
+}
+
+extension RemoteDraft {
     /// Beginner note: Initializers create valid state before any other method is used.
     init(remote: RemoteConfig, password: String = "") {
         self.id = remote.id
@@ -185,23 +237,5 @@ struct RemoteDraft: Equatable, Sendable {
         self.autoConnectOnLaunch = remote.autoConnectOnLaunch
         self.favoriteRemoteDirectories = remote.favoriteRemoteDirectories
         self.recentRemoteDirectories = remote.recentRemoteDirectories
-    }
-
-    /// Beginner note: This method is one step in the feature workflow for this file.
-    func asRemoteConfig() -> RemoteConfig {
-        RemoteConfig(
-            id: id ?? UUID(),
-            displayName: displayName.trimmingCharacters(in: .whitespacesAndNewlines),
-            host: host.trimmingCharacters(in: .whitespacesAndNewlines),
-            port: port,
-            username: username.trimmingCharacters(in: .whitespacesAndNewlines),
-            authMode: authMode,
-            privateKeyPath: privateKeyPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : privateKeyPath.trimmingCharacters(in: .whitespacesAndNewlines),
-            remoteDirectory: remoteDirectory.trimmingCharacters(in: .whitespacesAndNewlines),
-            localMountPoint: localMountPoint.trimmingCharacters(in: .whitespacesAndNewlines),
-            autoConnectOnLaunch: autoConnectOnLaunch,
-            favoriteRemoteDirectories: favoriteRemoteDirectories,
-            recentRemoteDirectories: recentRemoteDirectories
-        )
     }
 }

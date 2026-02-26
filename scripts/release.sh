@@ -23,6 +23,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+VERSION_LIB="$REPO_ROOT/scripts/lib/version.sh"
 
 VERSION_FILE="$REPO_ROOT/VERSION"
 APP_BUNDLE_PATH="$REPO_ROOT/build/macfuseGui.app"
@@ -50,6 +51,13 @@ DMG_PATHS=()
 CREATED_DMG_PATHS=()
 CREATED_STAGE_DIRS=()
 CREATED_NOTES_FILE=""
+
+[[ -f "$VERSION_LIB" ]] || {
+  echo "ERROR: Missing version helpers: $VERSION_LIB" >&2
+  exit 1
+}
+# shellcheck source=scripts/lib/version.sh
+source "$VERSION_LIB"
 
 RELEASE_NOTES=$'Unsigned macOS build (NOT code signed / NOT notarized)\n\nmacOS may block first launch.\n\nRecommended install path (Terminal installer):\n```bash\n/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/ripplethor/macfuseGUI/main/scripts/install_release.sh)"\n```\n\nHomebrew install (tap + cask):\n```bash\nbrew tap ripplethor/macfusegui https://github.com/ripplethor/macfuseGUI\nbrew install --cask ripplethor/macfusegui/macfusegui\n```\n\nDMG fallback:\n1) Open the DMG.\n2) Open Terminal.\n3) Run: /bin/bash "/Volumes/macfuseGui/Install macFUSEGui.command"\n4) The installer copies the app to /Applications, clears quarantine, and opens it.\n\nIf Finder blocks the app anyway, use the direct command shown in INSTALL_IN_TERMINAL.txt inside the DMG.'
 
@@ -150,6 +158,8 @@ require_cmd() {
 }
 
 cleanup() {
+  # Runs for both normal and dry-run exits. In dry-run, tracked temp arrays are
+  # expected to be empty, so this is effectively a no-op.
   local dmg
   for dmg in "${CREATED_DMG_PATHS[@]}"; do
     if [[ -n "$dmg" && -f "$dmg" ]]; then
@@ -175,6 +185,18 @@ Usage: ./scripts/release.sh [--dry-run|-n]
 Options:
   --dry-run, -n   Print release actions without changing git state or publishing to GitHub.
   --help, -h      Show this help.
+
+Environment:
+  ARCH_OVERRIDE=arm64|x86_64|both|universal  Target architecture (default: both).
+  CONFIGURATION=Release|Debug                Xcode build configuration (default: Release).
+  SKIP_BUILD=1                               Skip build and reuse existing app bundle(s).
+  RELEASE_VERSION=X.Y.Z                      Override auto-bumped patch version.
+  CODE_SIGNING_ALLOWED=YES|NO                Forwarded to build script (default: NO).
+  UPDATE_HOMEBREW_CASK=0|1                   Disable/enable cask update (default: 1).
+  STRIP_DMG_PAYLOAD=0|1                      Strip staged app executable before DMG create.
+
+Notes:
+  Dry-run still enforces a clean git working tree.
 EOF2
 }
 
@@ -184,7 +206,7 @@ normalize_arch() {
     x86_64|amd64) echo "x86_64" ;;
     all|universal) echo "universal" ;;
     both) echo "both" ;;
-    *) echo "$1" ;;
+    *) echo "__invalid__" ;;
   esac
 }
 
@@ -207,7 +229,7 @@ parse_args() {
 }
 
 is_valid_version() {
-  [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+  is_valid_semver "$1"
 }
 
 bump_patch() {
@@ -221,12 +243,7 @@ bump_patch() {
 }
 
 version_to_build_number() {
-  local ver="$1"
-  local major minor patch
-  major="${ver%%.*}"
-  minor="${ver#*.}"; minor="${minor%%.*}"
-  patch="${ver##*.}"
-  echo $((major * 10000 + minor * 100 + patch))
+  semver_to_build_number "$1"
 }
 
 list_remote_release_tags() {
@@ -691,9 +708,11 @@ main() {
 
     if [[ "$UPDATE_HOMEBREW_CASK" == "1" ]]; then
       if [[ "$ARCH_OVERRIDE_NORMALIZED" == "both" ]]; then
-        local arm_sha intel_sha
-        arm_sha="$(shasum -a 256 "${DMG_PATHS[0]}" | awk '{print $1}')"
-        intel_sha="$(shasum -a 256 "${DMG_PATHS[1]}" | awk '{print $1}')"
+        local arm_dmg_path intel_dmg_path arm_sha intel_sha
+        arm_dmg_path="$REPO_ROOT/macfuseGui-${tag}-macos-arm64.dmg"
+        intel_dmg_path="$REPO_ROOT/macfuseGui-${tag}-macos-x86_64.dmg"
+        arm_sha="$(shasum -a 256 "$arm_dmg_path" | awk '{print $1}')"
+        intel_sha="$(shasum -a 256 "$intel_dmg_path" | awk '{print $1}')"
         write_homebrew_cask "$new_version" "$arm_sha" "$intel_sha"
         echo "Updated Homebrew cask: $CASK_PATH"
       else
@@ -707,7 +726,7 @@ main() {
       git add -- "$CASK_PATH"
     fi
     if git diff --cached --quiet; then
-      echo "VERSION unchanged; skipping release commit."
+      echo "No staged changes; skipping release commit."
     else
       git commit -m "Release ${tag}"
     fi

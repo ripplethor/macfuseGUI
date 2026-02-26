@@ -61,6 +61,8 @@ final class RemotesViewModelHelpersTests: XCTestCase {
         XCTAssertEqual(BrowserPathNormalizer.normalize(path: "D::\\x"), "/D:/x")
         XCTAssertEqual(BrowserPathNormalizer.parentPath(of: "/D:/wwwroot/site"), "/D:/wwwroot")
         XCTAssertEqual(BrowserPathNormalizer.join(base: "/D:/wwwroot", child: "site"), "/D:/wwwroot/site")
+        XCTAssertEqual(BrowserPathNormalizer.join(base: "/home/philip", child: "/var/log"), "/var/log")
+        XCTAssertEqual(BrowserPathNormalizer.join(base: "/home/philip", child: "D:/wwwroot"), "/D:/wwwroot")
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
