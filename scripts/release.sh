@@ -107,8 +107,8 @@ generate_changelog() {
   # Exclude:
   # - auto release commits
   # - docs:* style commits
-  # - any commit that touches docs/, *.html, scripts/*.sh, or test files
-  git log --no-merges --pretty=format:'%H%x1f%s' "$range_ref" | while IFS=$'\x1f' read -r commit_hash subject; do
+  # - commits that only touch docs/, *.html, scripts/*.sh, or test files
+  git log --no-merges --pretty=format:'%H%x1f%s%n' "$range_ref" | while IFS=$'\x1f' read -r commit_hash subject; do
     [[ -n "$commit_hash" ]] || continue
 
     if printf '%s\n' "$subject" | grep -Eq '^Release[[:space:]]v[0-9]+\.[0-9]+\.[0-9]+$'; then
@@ -119,7 +119,15 @@ generate_changelog() {
       continue
     fi
 
-    if git diff-tree --no-commit-id --name-only -r "$commit_hash" | grep -Eq '^(docs/|.*\.html$|scripts/.*\.sh$|macfuseGuiTests/|macfuseguitest/)'; then
+    local changed_paths
+    changed_paths="$(git diff-tree --no-commit-id --name-only -r "$commit_hash")"
+    if [[ -z "$changed_paths" ]]; then
+      continue
+    fi
+
+    # Keep mixed commits (for example app code + tests). Skip only if all paths
+    # are in docs/html/scripts/tests-only buckets.
+    if ! printf '%s\n' "$changed_paths" | grep -Eqv '^(docs/|.*\.html$|scripts/.*\.sh$|macfuseGuiTests/|macfuseguitest/)'; then
       continue
     fi
 
