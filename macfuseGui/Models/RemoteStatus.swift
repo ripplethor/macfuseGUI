@@ -74,9 +74,8 @@ struct RemoteStatus: Codable, Equatable, Hashable, Sendable {
 extension String {
     /// Collapse whitespace/newlines to single spaces and truncate with an ellipsis.
     func collapsedAndTruncatedForDisplay(limit: Int = 180) -> String {
-        let collapsed = components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
+        let collapsed = replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
         if collapsed.count <= limit {
             return collapsed

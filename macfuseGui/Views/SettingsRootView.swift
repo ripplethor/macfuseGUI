@@ -216,12 +216,12 @@ struct SettingsRootView: View {
                     Button("Connect") {
                         Task { await viewModel.connect(remoteID: remote.id) }
                     }
-                    .disabled(!(status.state == .disconnected || status.state == .error || status.state == .disconnecting))
+                    .disabled(!status.canConnect)
 
                     Button("Disconnect") {
                         Task { await viewModel.disconnect(remoteID: remote.id) }
                     }
-                    .disabled(!(status.state == .connected || status.state == .connecting))
+                    .disabled(!status.canDisconnect)
                 }
             }
         } else {
@@ -245,16 +245,7 @@ struct SettingsRootView: View {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func shortError(_ message: String) -> String {
-        let collapsed = message
-            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if collapsed.count <= 220 {
-            return collapsed
-        }
-
-        let prefix = collapsed.prefix(220)
-        return "\(prefix)…"
+        message.collapsedAndTruncatedForDisplay(limit: 220)
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.

@@ -19,6 +19,12 @@ import Foundation
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 actor MountManager {
+    private enum DirectoryQueryHealth {
+        case healthy
+        case timedOut
+        case failed
+    }
+
     private let runner: ProcessRunning
     private let dependencyChecker: DependencyChecking
     private let askpassHelper: AskpassHelper
@@ -30,14 +36,19 @@ actor MountManager {
     private let mountInspectionCommandTimeout: TimeInterval = 1.5
     private let mountInspectionFallbackTimeout: TimeInterval = 1.5
     private let mountResponsivenessTimeout: TimeInterval = 1.5
+    // Directory queries can be slower than metadata probes on healthy network mounts.
+    private let mountDirectoryQueryTimeout: TimeInterval = 3.5
     // Prevent indefinite "connected" false-positives when mount table parsing fails but local path still exists.
     private let maxConnectedPreserveMisses = 2
+    // Treat one-off directory query timeouts as transient before forcing recovery.
+    private let maxDirectoryQueryTimeoutPreserveMisses = 2
     private let sshfsConnectCommandTimeout: TimeInterval
     private let forceStopProcessListTimeout: TimeInterval = 3
 
     // Internal status cache so callers can ask current state without rerunning probes.
     private var statuses: [UUID: RemoteStatus] = [:]
     private var connectedPreserveMisses: [UUID: Int] = [:]
+    private var directoryQueryTimeoutPreserveMisses: [UUID: Int] = [:]
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init(
@@ -93,6 +104,9 @@ actor MountManager {
             )
             if let cancelled = cancelledStatus() {
                 return cancelled
+            }
+            if mountedRecord == nil {
+                directoryQueryTimeoutPreserveMisses[remote.id] = 0
             }
 
             // Guard against single-pass probe misses: if we were connected, do a fast
@@ -173,21 +187,71 @@ actor MountManager {
                 if let cancelled = cancelledStatus() {
                     return cancelled
                 }
-                let directoryHealthy = metadataHealthy
-                    ? await isMountDirectoryQueryable(
-                        remote.localMountPoint,
-                        remoteID: remote.id,
-                        operationID: operationID
+                guard metadataHealthy else {
+                    directoryQueryTimeoutPreserveMisses[remote.id] = 0
+                    // Important: refreshStatus should stay lightweight.
+                    // Do not run full unmount cleanup in this probe path, because that can
+                    // take tens of seconds and block mount status refresh flow.
+                    diagnostics.append(level: .warning, category: "mount", message: "Stale mount detected at \(remote.localMountPoint). Marking as error for reconnect flow.")
+                    let staleStatus = RemoteStatus(
+                        state: .error,
+                        mountedPath: nil,
+                        lastError: "Detected stale mount. Reconnect will perform cleanup.",
+                        updatedAt: Date()
                     )
-                    : false
+                    updateCachedStatus(staleStatus, for: remote.id)
+                    return staleStatus
+                }
+
+                let directoryHealth = await mountDirectoryHealth(
+                    remote.localMountPoint,
+                    remoteID: remote.id,
+                    operationID: operationID
+                )
                 if let cancelled = cancelledStatus() {
                     return cancelled
                 }
 
-                if !metadataHealthy || !directoryHealthy {
-                    // Important: refreshStatus should stay lightweight.
-                    // Do not run full unmount cleanup in this probe path, because that can
-                    // take tens of seconds and block mount status refresh flow.
+                switch directoryHealth {
+                case .healthy:
+                    directoryQueryTimeoutPreserveMisses[remote.id] = 0
+                case .timedOut:
+                    let timeoutMissCount = (directoryQueryTimeoutPreserveMisses[remote.id] ?? 0) + 1
+                    directoryQueryTimeoutPreserveMisses[remote.id] = timeoutMissCount
+
+                    // Preserve briefly when we have a confirmed mount record and healthy
+                    // metadata probe, even if this is first refresh after launch.
+                    if timeoutMissCount <= maxDirectoryQueryTimeoutPreserveMisses {
+                        let preserved = RemoteStatus(
+                            state: .connected,
+                            mountedPath: mountedRecord.mountPoint,
+                            lastError: nil,
+                            updatedAt: Date()
+                        )
+                        updateCachedStatus(preserved, for: remote.id)
+                        diagnostics.append(
+                            level: .debug,
+                            category: "mount",
+                            message: "Preserved connected state for \(remote.displayName) after directory query timeout (\(timeoutMissCount)/\(maxDirectoryQueryTimeoutPreserveMisses))."
+                        )
+                        return preserved
+                    }
+
+                    diagnostics.append(
+                        level: .warning,
+                        category: "mount",
+                        message: "Stale mount detected at \(remote.localMountPoint) after repeated directory query timeouts. Marking as error for reconnect flow."
+                    )
+                    let staleStatus = RemoteStatus(
+                        state: .error,
+                        mountedPath: nil,
+                        lastError: "Detected stale mount. Reconnect will perform cleanup.",
+                        updatedAt: Date()
+                    )
+                    updateCachedStatus(staleStatus, for: remote.id)
+                    return staleStatus
+                case .failed:
+                    directoryQueryTimeoutPreserveMisses[remote.id] = 0
                     diagnostics.append(level: .warning, category: "mount", message: "Stale mount detected at \(remote.localMountPoint). Marking as error for reconnect flow.")
                     let staleStatus = RemoteStatus(
                         state: .error,
@@ -210,6 +274,7 @@ actor MountManager {
             }
 
             connectedPreserveMisses[remote.id] = 0
+            directoryQueryTimeoutPreserveMisses[remote.id] = 0
             let disconnected = RemoteStatus(state: .disconnected, updatedAt: Date())
             updateCachedStatus(disconnected, for: remote.id)
             return disconnected
@@ -250,6 +315,7 @@ actor MountManager {
                     }
 
                     connectedPreserveMisses[remote.id] = 0
+                    directoryQueryTimeoutPreserveMisses[remote.id] = 0
                     let staleStatus = RemoteStatus(
                         state: .error,
                         mountedPath: nil,
@@ -267,6 +333,7 @@ actor MountManager {
                     updatedAt: Date()
                 )
                 connectedPreserveMisses[remote.id] = 0
+                directoryQueryTimeoutPreserveMisses[remote.id] = 0
                 updateCachedStatus(disconnected, for: remote.id)
                 return disconnected
             }
@@ -295,6 +362,7 @@ actor MountManager {
         }
 
         logActorQueueDelay(op: "connect", remote: remote, queuedAt: queuedAt, operationID: operationID)
+        clearRefreshProbeMisses(for: remote.id)
 
         let connectBeganAt = Date()
         // Set transitional state immediately so UI can show "connecting".
@@ -489,6 +557,7 @@ actor MountManager {
         }
 
         logActorQueueDelay(op: "disconnect", remote: remote, queuedAt: queuedAt, operationID: operationID)
+        clearRefreshProbeMisses(for: remote.id)
 
         let disconnectBeganAt = Date()
         // Set transitional state immediately for responsive UI feedback.
@@ -513,9 +582,6 @@ actor MountManager {
                 throw AppError.processFailure("Unmount did not complete for \(remote.localMountPoint).")
             }
 
-            // Keep the transitional state visible long enough for live UI updates.
-            try await enforceMinimumTransitionVisibility(since: disconnectBeganAt, minimumSeconds: 0.7)
-
             let status = RemoteStatus(
                 state: .disconnected,
                 mountedPath: nil,
@@ -523,6 +589,14 @@ actor MountManager {
                 updatedAt: Date()
             )
             updateCachedStatus(status, for: remote.id)
+
+            // Keep the transitional state visible long enough for live UI updates.
+            // If cancelled during this sleep, keep the successful disconnected result.
+            do {
+                try await enforceMinimumTransitionVisibility(since: disconnectBeganAt, minimumSeconds: 0.7)
+            } catch is CancellationError {
+                return status
+            }
             return status
         } catch {
             let status = RemoteStatus(
@@ -920,7 +994,7 @@ actor MountManager {
     /// This can throw an error: callers should use do/try/catch or propagate the error.
     private func throwIfCancelled() throws {
         if Task.isCancelled {
-            throw AppError.timeout("Operation was cancelled.")
+            throw CancellationError()
         }
     }
 
@@ -966,11 +1040,11 @@ actor MountManager {
 
     /// Beginner note: Some broken FUSE mounts can still pass stat but fail directory reads
     /// with "Device not configured". This probe checks directory query health cheaply.
-    private func isMountDirectoryQueryable(
+    private func mountDirectoryHealth(
         _ mountPoint: String,
         remoteID: UUID? = nil,
         operationID: UUID? = nil
-    ) async -> Bool {
+    ) async -> DirectoryQueryHealth {
         let startedAt = Date()
         let remoteText = remoteID?.uuidString ?? "-"
         let operationText = operationID?.uuidString ?? "-"
@@ -984,7 +1058,7 @@ actor MountManager {
             let result = try await runner.run(
                 executable: "/usr/bin/find",
                 arguments: [mountPoint, "-mindepth", "1", "-maxdepth", "1", "-print", "-quit"],
-                timeout: mountResponsivenessTimeout
+                timeout: mountDirectoryQueryTimeout
             )
             let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
             diagnostics.append(
@@ -992,7 +1066,10 @@ actor MountManager {
                 category: "mount",
                 message: "probe end op=mount-dir-query remoteID=\(remoteText) operationID=\(operationText) path=\(mountPoint) elapsedMs=\(elapsedMs) timedOut=\(result.timedOut) exit=\(result.exitCode)"
             )
-            return !result.timedOut && result.exitCode == 0
+            if result.timedOut {
+                return .timedOut
+            }
+            return result.exitCode == 0 ? .healthy : .failed
         } catch {
             let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
             diagnostics.append(
@@ -1000,7 +1077,7 @@ actor MountManager {
                 category: "mount",
                 message: "probe end op=mount-dir-query remoteID=\(remoteText) operationID=\(operationText) path=\(mountPoint) elapsedMs=\(elapsedMs) error=\(error.localizedDescription)"
             )
-            return false
+            return .failed
         }
     }
 
@@ -1164,6 +1241,11 @@ actor MountManager {
 
     private func updateCachedStatus(_ status: RemoteStatus, for remoteID: UUID) {
         statuses[remoteID] = status
+    }
+
+    private func clearRefreshProbeMisses(for remoteID: UUID) {
+        connectedPreserveMisses[remoteID] = 0
+        directoryQueryTimeoutPreserveMisses[remoteID] = 0
     }
 
     private func logActorQueueDelay(op: String, remote: RemoteConfig, queuedAt: Date, operationID: UUID?) {

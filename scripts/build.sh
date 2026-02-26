@@ -56,8 +56,27 @@ is_valid_build_version() {
 
 resolve_marketing_version_from_repo() {
   if command -v git >/dev/null 2>&1; then
+    local version_from_origin_tag=""
+    if git remote get-url origin >/dev/null 2>&1; then
+      version_from_origin_tag="$(
+        git ls-remote --tags --refs origin 'refs/tags/v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null \
+          | awk '{print $2}' \
+          | sed 's#refs/tags/v##' \
+          | sort -V \
+          | tail -n 1 || true
+      )"
+      if [[ -n "$version_from_origin_tag" ]]; then
+        is_valid_semver "$version_from_origin_tag" || {
+          echo "Invalid origin tag version: $version_from_origin_tag (expected X.Y.Z)" >&2
+          exit 1
+        }
+        echo "$version_from_origin_tag"
+        return
+      fi
+    fi
+
     local version_from_tag=""
-    # Uses local tags only; run `git fetch --tags origin` first if tags may be stale.
+    # Fallback to local tags when origin is unavailable (for example offline builds).
     version_from_tag="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null | sed 's/^v//' | sort -V | tail -n 1 || true)"
     if [[ -n "$version_from_tag" ]]; then
       is_valid_semver "$version_from_tag" || {

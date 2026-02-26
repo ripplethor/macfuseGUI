@@ -303,6 +303,61 @@ final class MountManagerParallelOperationTests: XCTestCase {
         XCTAssertTrue((refreshed.lastError ?? "").localizedCaseInsensitiveContains("stale mount"))
     }
 
+    /// Beginner note: One-off directory query timeouts can be transient on healthy network mounts.
+    /// Refresh should preserve connected briefly before escalating to stale recovery.
+    func testRefreshPreservesConnectedBeforeEscalatingRepeatedDirectoryQueryTimeouts() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/stale-timeout-preserve"
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            alwaysResponsivePaths: [mountPoint],
+            timedOutDirectoryQueryPaths: [mountPoint]
+        )
+        let manager = makeManager(runner: runner)
+        let remote = makeRemote(name: "Stale Timeout Preserve", mountPoint: mountPoint)
+
+        let connected = await manager.connect(remote: remote, password: nil)
+        XCTAssertEqual(connected.state, .connected)
+
+        let first = await manager.refreshStatus(remote: remote)
+        let second = await manager.refreshStatus(remote: remote)
+        let third = await manager.refreshStatus(remote: remote)
+        let fourth = await manager.refreshStatus(remote: remote)
+
+        XCTAssertEqual(first.state, .connected)
+        XCTAssertEqual(second.state, .connected)
+        XCTAssertEqual(third.state, .error)
+        XCTAssertEqual(fourth.state, .error)
+        XCTAssertTrue((third.lastError ?? "").localizedCaseInsensitiveContains("stale mount"))
+    }
+
+    /// Beginner note: Startup refresh begins from uncached .initial/.disconnected state.
+    /// If mount is present and metadata probe is healthy, treat initial directory-query
+    /// timeouts as transient and preserve connected briefly before escalating.
+    func testStartupRefreshPreservesConnectedWhenMountExistsAndDirectoryQueryTimesOut() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/startup-timeout-preserve"
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            timedOutDirectoryQueryPaths: [mountPoint]
+        )
+        await runner.simulateExternalMount(mountPoint: mountPoint)
+
+        let manager = makeManager(runner: runner)
+        let remote = makeRemote(name: "Startup Timeout Preserve", mountPoint: mountPoint)
+
+        // Explicit startup precondition: no cached status yet for this remote.
+        let initialStatus = await manager.status(for: remote.id)
+        XCTAssertEqual(initialStatus.state, .disconnected)
+
+        let first = await manager.refreshStatus(remote: remote)
+        let second = await manager.refreshStatus(remote: remote)
+        let third = await manager.refreshStatus(remote: remote)
+
+        XCTAssertEqual(first.state, .connected)
+        XCTAssertEqual(second.state, .connected)
+        XCTAssertEqual(third.state, .error)
+        XCTAssertTrue((third.lastError ?? "").localizedCaseInsensitiveContains("stale mount"))
+    }
+
     private func makeManager(runner: ProcessRunning) -> MountManager {
         let diagnostics = DiagnosticsService()
         let parser = MountStateParser()
@@ -349,6 +404,7 @@ private actor FakeMountRunner: ProcessRunning {
     private var mountedPoints: Set<String> = []
     private let alwaysResponsivePaths: Set<String>
     private let unreadableMountedPaths: Set<String>
+    private let timedOutDirectoryQueryPaths: Set<String>
     private let connectDelayByMountPoint: [String: TimeInterval]
     private var connectDelayScheduleByMountPoint: [String: [TimeInterval]]
     private let mountInspectionDelay: TimeInterval
@@ -358,17 +414,23 @@ private actor FakeMountRunner: ProcessRunning {
         connectDelayScheduleByMountPoint: [String: [TimeInterval]] = [:],
         mountInspectionDelay: TimeInterval = 0,
         alwaysResponsivePaths: Set<String> = [],
-        unreadableMountedPaths: Set<String> = []
+        unreadableMountedPaths: Set<String> = [],
+        timedOutDirectoryQueryPaths: Set<String> = []
     ) {
         self.connectDelayByMountPoint = connectDelayByMountPoint
         self.connectDelayScheduleByMountPoint = connectDelayScheduleByMountPoint
         self.mountInspectionDelay = mountInspectionDelay
         self.alwaysResponsivePaths = alwaysResponsivePaths
         self.unreadableMountedPaths = unreadableMountedPaths
+        self.timedOutDirectoryQueryPaths = timedOutDirectoryQueryPaths
     }
 
     func simulateExternalUnmount(mountPoint: String) {
         mountedPoints.remove(mountPoint)
+    }
+
+    func simulateExternalMount(mountPoint: String) {
+        mountedPoints.insert(mountPoint)
     }
 
     func run(
@@ -483,15 +545,16 @@ private actor FakeMountRunner: ProcessRunning {
 
         if executable == "/usr/bin/find", let path = arguments.first {
             let isMounted = mountedPoints.contains(path)
+            let shouldTimeout = timedOutDirectoryQueryPaths.contains(path)
             let isUnreadable = unreadableMountedPaths.contains(path)
-            let success = isMounted && !isUnreadable
+            let success = isMounted && !isUnreadable && !shouldTimeout
             return ProcessResult(
                 executable: executable,
                 arguments: arguments,
                 stdout: success ? path : "",
-                stderr: success ? "" : (isMounted ? "Device not configured" : "No such file or directory"),
-                exitCode: success ? 0 : 1,
-                timedOut: false,
+                stderr: shouldTimeout ? "timed out" : (success ? "" : (isMounted ? "Device not configured" : "No such file or directory")),
+                exitCode: shouldTimeout ? 15 : (success ? 0 : 1),
+                timedOut: shouldTimeout,
                 duration: Date().timeIntervalSince(startedAt)
             )
         }
