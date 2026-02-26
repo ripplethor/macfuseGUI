@@ -87,6 +87,7 @@ final class DiagnosticsService {
         dependency: DependencyStatus?,
         browserSessions: String? = nil,
         operations: String? = nil,
+        mountProbes: String? = nil,
         secrets: [String] = []
     ) -> String {
         var contextualSecrets = secrets
@@ -120,6 +121,14 @@ final class DiagnosticsService {
                 let errorText = redactionService.redact(status.lastError ?? "", secrets: contextualSecrets)
                 lines.append(redactedLine("- \(remote.displayName) [\(remote.host):\(remote.port)] status=\(status.state.rawValue) mount=\(status.mountedPath ?? "-") error=\(errorText)", secrets: contextualSecrets))
             }
+        }
+
+        lines.append("Mount Probes:")
+        if let mountProbes, !mountProbes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let redacted = redactionService.redact(mountProbes, secrets: contextualSecrets)
+            lines.append(contentsOf: redacted.split(separator: "\n", omittingEmptySubsequences: false).map { redactedLine(String($0), secrets: contextualSecrets) })
+        } else {
+            lines.append("- none")
         }
 
         lines.append("Recent logs:")

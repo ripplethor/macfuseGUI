@@ -25,6 +25,17 @@ actor MountManager {
         case failed(reason: String)
     }
 
+    private struct DirectoryQueryProbeStats {
+        var timeoutEvents: Int = 0
+        var deviceNotConfiguredEvents: Int = 0
+        var otherFailureEvents: Int = 0
+        var staleEscalations: Int = 0
+        var cooldownSuppressions: Int = 0
+        var lastFailureReason: String?
+        var lastFailureAt: Date?
+        var lastHealthyAt: Date?
+    }
+
     private let runner: ProcessRunning
     private let dependencyChecker: DependencyChecking
     private let askpassHelper: AskpassHelper
@@ -45,6 +56,9 @@ actor MountManager {
     // Directory-query exit failures can also be transient around wake/network restore.
     // Keep a short grace window before declaring stale and forcing reconnect.
     private let maxDirectoryQueryFailurePreserveMisses = 2
+    // After a cleanup-driven reconnect, give directory queries a short warm-up window
+    // before they are allowed to trigger stale recovery again.
+    private let directoryQueryReconnectCooldownSeconds: TimeInterval
     private let sshfsConnectCommandTimeout: TimeInterval
     private let forceStopProcessListTimeout: TimeInterval = 3
 
@@ -53,6 +67,8 @@ actor MountManager {
     private var connectedPreserveMisses: [UUID: Int] = [:]
     private var directoryQueryTimeoutPreserveMisses: [UUID: Int] = [:]
     private var directoryQueryFailurePreserveMisses: [UUID: Int] = [:]
+    private var reconnectDirectoryQueryCooldownUntil: [UUID: Date] = [:]
+    private var directoryQueryProbeStatsByRemote: [UUID: DirectoryQueryProbeStats] = [:]
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init(
@@ -63,7 +79,8 @@ actor MountManager {
         mountStateParser: MountStateParser,
         diagnostics: DiagnosticsService,
         commandBuilder: MountCommandBuilder,
-        sshfsConnectCommandTimeout: TimeInterval = 20
+        sshfsConnectCommandTimeout: TimeInterval = 20,
+        directoryQueryReconnectCooldownSeconds: TimeInterval = 30
     ) {
         self.runner = runner
         self.dependencyChecker = dependencyChecker
@@ -73,11 +90,52 @@ actor MountManager {
         self.diagnostics = diagnostics
         self.commandBuilder = commandBuilder
         self.sshfsConnectCommandTimeout = sshfsConnectCommandTimeout
+        self.directoryQueryReconnectCooldownSeconds = max(0, directoryQueryReconnectCooldownSeconds)
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     func status(for remoteID: UUID) -> RemoteStatus {
         cachedStatus(for: remoteID)
+    }
+
+    /// Beginner note: Snapshot-friendly summary of per-remote refresh probe counters.
+    func refreshProbeDiagnosticsSummary(remotes: [RemoteConfig]) -> String {
+        guard !remotes.isEmpty else {
+            return "- none"
+        }
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let now = Date()
+
+        let lines = remotes
+            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            .map { remote -> String in
+                let timeoutStrike = directoryQueryTimeoutPreserveMisses[remote.id] ?? 0
+                let failureStrike = directoryQueryFailurePreserveMisses[remote.id] ?? 0
+                let cooldownRemaining = directoryQueryCooldownRemainingSeconds(for: remote.id, now: now)
+                let stats = directoryQueryProbeStatsByRemote[remote.id] ?? DirectoryQueryProbeStats()
+                let lastFailureAt = stats.lastFailureAt.map { formatter.string(from: $0) } ?? "-"
+                let lastHealthyAt = stats.lastHealthyAt.map { formatter.string(from: $0) } ?? "-"
+                let compactReason = (stats.lastFailureReason ?? "-")
+                    .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                return "- \(remote.displayName) remoteID=\(remote.id.uuidString) " +
+                    "timeoutStrike=\(timeoutStrike)/\(maxDirectoryQueryTimeoutPreserveMisses) " +
+                    "failureStrike=\(failureStrike)/\(maxDirectoryQueryFailurePreserveMisses) " +
+                    "cooldownRemainingSec=\(cooldownRemaining) " +
+                    "timeoutEvents=\(stats.timeoutEvents) " +
+                    "deviceNotConfiguredEvents=\(stats.deviceNotConfiguredEvents) " +
+                    "otherFailureEvents=\(stats.otherFailureEvents) " +
+                    "staleEscalations=\(stats.staleEscalations) " +
+                    "cooldownSuppressions=\(stats.cooldownSuppressions) " +
+                    "lastFailureAt=\(lastFailureAt) " +
+                    "lastHealthyAt=\(lastHealthyAt) " +
+                    "lastFailureReason=\(compactReason.isEmpty ? "-" : compactReason)"
+            }
+
+        return lines.joined(separator: "\n")
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -112,6 +170,7 @@ actor MountManager {
             if mountedRecord == nil {
                 directoryQueryTimeoutPreserveMisses[remote.id] = 0
                 directoryQueryFailurePreserveMisses[remote.id] = 0
+                reconnectDirectoryQueryCooldownUntil.removeValue(forKey: remote.id)
             }
 
             // Guard against single-pass probe misses: if we were connected, do a fast
@@ -195,6 +254,7 @@ actor MountManager {
                 guard metadataHealthy else {
                     directoryQueryTimeoutPreserveMisses[remote.id] = 0
                     directoryQueryFailurePreserveMisses[remote.id] = 0
+                    reconnectDirectoryQueryCooldownUntil.removeValue(forKey: remote.id)
                     // Important: refreshStatus should stay lightweight.
                     // Do not run full unmount cleanup in this probe path, because that can
                     // take tens of seconds and block mount status refresh flow.
@@ -222,7 +282,29 @@ actor MountManager {
                 case .healthy:
                     directoryQueryTimeoutPreserveMisses[remote.id] = 0
                     directoryQueryFailurePreserveMisses[remote.id] = 0
+                    recordDirectoryQueryHealthy(for: remote.id)
                 case .timedOut:
+                    recordDirectoryQueryTimeout(for: remote.id)
+                    let cooldownRemainingSeconds = directoryQueryCooldownRemainingSeconds(for: remote.id)
+                    if cooldownRemainingSeconds > 0 {
+                        directoryQueryTimeoutPreserveMisses[remote.id] = 0
+                        directoryQueryFailurePreserveMisses[remote.id] = 0
+                        recordDirectoryQueryCooldownSuppression(for: remote.id)
+                        let preserved = RemoteStatus(
+                            state: .connected,
+                            mountedPath: mountedRecord.mountPoint,
+                            lastError: nil,
+                            updatedAt: Date()
+                        )
+                        updateCachedStatus(preserved, for: remote.id)
+                        diagnostics.append(
+                            level: .debug,
+                            category: "mount",
+                            message: "Suppressed stale escalation for \(remote.displayName) during post-reconnect cooldown (\(cooldownRemainingSeconds)s remaining) after directory query timeout."
+                        )
+                        return preserved
+                    }
+
                     directoryQueryFailurePreserveMisses[remote.id] = 0
                     let timeoutMissCount = (directoryQueryTimeoutPreserveMisses[remote.id] ?? 0) + 1
                     directoryQueryTimeoutPreserveMisses[remote.id] = timeoutMissCount
@@ -250,6 +332,7 @@ actor MountManager {
                         category: "mount",
                         message: "Stale mount detected at \(remote.localMountPoint) after repeated directory query timeouts. Marking as error for reconnect flow."
                     )
+                    recordDirectoryQueryStaleEscalation(for: remote.id)
                     let staleStatus = RemoteStatus(
                         state: .error,
                         mountedPath: nil,
@@ -259,6 +342,27 @@ actor MountManager {
                     updateCachedStatus(staleStatus, for: remote.id)
                     return staleStatus
                 case .failed(let reason):
+                    recordDirectoryQueryFailure(for: remote.id, reason: reason)
+                    let cooldownRemainingSeconds = directoryQueryCooldownRemainingSeconds(for: remote.id)
+                    if cooldownRemainingSeconds > 0 {
+                        directoryQueryTimeoutPreserveMisses[remote.id] = 0
+                        directoryQueryFailurePreserveMisses[remote.id] = 0
+                        recordDirectoryQueryCooldownSuppression(for: remote.id)
+                        let preserved = RemoteStatus(
+                            state: .connected,
+                            mountedPath: mountedRecord.mountPoint,
+                            lastError: nil,
+                            updatedAt: Date()
+                        )
+                        updateCachedStatus(preserved, for: remote.id)
+                        diagnostics.append(
+                            level: .debug,
+                            category: "mount",
+                            message: "Suppressed stale escalation for \(remote.displayName) during post-reconnect cooldown (\(cooldownRemainingSeconds)s remaining) after directory query failure: \(reason)"
+                        )
+                        return preserved
+                    }
+
                     directoryQueryTimeoutPreserveMisses[remote.id] = 0
                     let failureMissCount = (directoryQueryFailurePreserveMisses[remote.id] ?? 0) + 1
                     directoryQueryFailurePreserveMisses[remote.id] = failureMissCount
@@ -286,6 +390,7 @@ actor MountManager {
                         category: "mount",
                         message: "Stale mount detected at \(remote.localMountPoint) after repeated directory query failures (\(reason)). Marking as error for reconnect flow."
                     )
+                    recordDirectoryQueryStaleEscalation(for: remote.id)
                     let staleStatus = RemoteStatus(
                         state: .error,
                         mountedPath: nil,
@@ -309,6 +414,7 @@ actor MountManager {
             connectedPreserveMisses[remote.id] = 0
             directoryQueryTimeoutPreserveMisses[remote.id] = 0
             directoryQueryFailurePreserveMisses[remote.id] = 0
+            reconnectDirectoryQueryCooldownUntil.removeValue(forKey: remote.id)
             let disconnected = RemoteStatus(state: .disconnected, updatedAt: Date())
             updateCachedStatus(disconnected, for: remote.id)
             return disconnected
@@ -351,6 +457,7 @@ actor MountManager {
                     connectedPreserveMisses[remote.id] = 0
                     directoryQueryTimeoutPreserveMisses[remote.id] = 0
                     directoryQueryFailurePreserveMisses[remote.id] = 0
+                    reconnectDirectoryQueryCooldownUntil.removeValue(forKey: remote.id)
                     let staleStatus = RemoteStatus(
                         state: .error,
                         mountedPath: nil,
@@ -370,6 +477,7 @@ actor MountManager {
                 connectedPreserveMisses[remote.id] = 0
                 directoryQueryTimeoutPreserveMisses[remote.id] = 0
                 directoryQueryFailurePreserveMisses[remote.id] = 0
+                reconnectDirectoryQueryCooldownUntil.removeValue(forKey: remote.id)
                 updateCachedStatus(disconnected, for: remote.id)
                 return disconnected
             }
@@ -497,11 +605,13 @@ actor MountManager {
             )
             try await enforceMinimumTransitionVisibility(since: connectBeganAt, minimumSeconds: 0.8)
             updateCachedStatus(status, for: remote.id)
+            setReconnectDirectoryQueryCooldown(for: remote.id, enabled: preConnectCleanupPerformed)
             return status
         } catch {
             if !Task.isCancelled {
                 try? await enforceMinimumTransitionVisibility(since: connectBeganAt, minimumSeconds: 0.8)
             }
+            reconnectDirectoryQueryCooldownUntil.removeValue(forKey: remote.id)
             let status = RemoteStatus(
                 state: .error,
                 mountedPath: nil,
@@ -625,6 +735,7 @@ actor MountManager {
                 updatedAt: Date()
             )
             updateCachedStatus(status, for: remote.id)
+            reconnectDirectoryQueryCooldownUntil.removeValue(forKey: remote.id)
 
             // Keep the transitional state visible long enough for live UI updates.
             // If cancelled during this sleep, keep the successful disconnected result.
@@ -642,6 +753,7 @@ actor MountManager {
                 updatedAt: Date()
             )
             updateCachedStatus(status, for: remote.id)
+            reconnectDirectoryQueryCooldownUntil.removeValue(forKey: remote.id)
             diagnostics.append(level: .error, category: "mount", message: "Disconnect failed for \(remote.displayName): \(error.localizedDescription)")
             return status
         }
@@ -1303,6 +1415,74 @@ actor MountManager {
         connectedPreserveMisses[remoteID] = 0
         directoryQueryTimeoutPreserveMisses[remoteID] = 0
         directoryQueryFailurePreserveMisses[remoteID] = 0
+    }
+
+    private func setReconnectDirectoryQueryCooldown(for remoteID: UUID, enabled: Bool) {
+        guard enabled, directoryQueryReconnectCooldownSeconds > 0 else {
+            reconnectDirectoryQueryCooldownUntil.removeValue(forKey: remoteID)
+            return
+        }
+        reconnectDirectoryQueryCooldownUntil[remoteID] = Date().addingTimeInterval(directoryQueryReconnectCooldownSeconds)
+    }
+
+    private func directoryQueryCooldownRemainingSeconds(for remoteID: UUID, now: Date = Date()) -> Int {
+        guard let until = reconnectDirectoryQueryCooldownUntil[remoteID] else {
+            return 0
+        }
+        let remaining = until.timeIntervalSince(now)
+        guard remaining > 0 else {
+            reconnectDirectoryQueryCooldownUntil.removeValue(forKey: remoteID)
+            return 0
+        }
+        return Int(remaining.rounded(.up))
+    }
+
+    private func recordDirectoryQueryHealthy(for remoteID: UUID) {
+        updateDirectoryQueryProbeStats(for: remoteID) { stats in
+            stats.lastHealthyAt = Date()
+        }
+    }
+
+    private func recordDirectoryQueryTimeout(for remoteID: UUID) {
+        updateDirectoryQueryProbeStats(for: remoteID) { stats in
+            stats.timeoutEvents += 1
+            stats.lastFailureAt = Date()
+            stats.lastFailureReason = "timed out"
+        }
+    }
+
+    private func recordDirectoryQueryFailure(for remoteID: UUID, reason: String) {
+        let normalizedReason = reason.lowercased()
+        updateDirectoryQueryProbeStats(for: remoteID) { stats in
+            if normalizedReason.contains("device not configured") {
+                stats.deviceNotConfiguredEvents += 1
+            } else {
+                stats.otherFailureEvents += 1
+            }
+            stats.lastFailureAt = Date()
+            stats.lastFailureReason = reason
+        }
+    }
+
+    private func recordDirectoryQueryStaleEscalation(for remoteID: UUID) {
+        updateDirectoryQueryProbeStats(for: remoteID) { stats in
+            stats.staleEscalations += 1
+        }
+    }
+
+    private func recordDirectoryQueryCooldownSuppression(for remoteID: UUID) {
+        updateDirectoryQueryProbeStats(for: remoteID) { stats in
+            stats.cooldownSuppressions += 1
+        }
+    }
+
+    private func updateDirectoryQueryProbeStats(
+        for remoteID: UUID,
+        _ update: (inout DirectoryQueryProbeStats) -> Void
+    ) {
+        var stats = directoryQueryProbeStatsByRemote[remoteID] ?? DirectoryQueryProbeStats()
+        update(&stats)
+        directoryQueryProbeStatsByRemote[remoteID] = stats
     }
 
     private func logActorQueueDelay(op: String, remote: RemoteConfig, queuedAt: Date, operationID: UUID?) {

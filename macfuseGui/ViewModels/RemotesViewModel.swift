@@ -2883,12 +2883,14 @@ final class RemotesViewModel: ObservableObject {
         Task { @MainActor in
             let browserSessions = await remoteDirectoryBrowserService.browserSessionsSummary()
             let operations = operationsSummary()
+            let mountProbes = await mountManager.refreshProbeDiagnosticsSummary(remotes: remotes)
             let snapshot = diagnostics.snapshot(
                 remotes: remotes,
                 statuses: statuses,
                 dependency: dependencyStatus,
                 browserSessions: browserSessions,
-                operations: operations
+                operations: operations,
+                mountProbes: mountProbes
             )
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()

@@ -408,7 +408,81 @@ final class MountManagerParallelOperationTests: XCTestCase {
         XCTAssertTrue((third.lastError ?? "").localizedCaseInsensitiveContains("stale mount"))
     }
 
-    private func makeManager(runner: ProcessRunning) -> MountManager {
+    /// Beginner note: After cleanup-driven reconnect, directory query checks can fail briefly
+    /// while the mount warms up. Keep a short cooldown so we do not re-trigger stale recovery
+    /// immediately after a successful reconnect.
+    func testRefreshAppliesShortCooldownAfterCleanupReconnectBeforeDirectoryEscalation() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/reconnect-dir-query-cooldown"
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            alwaysResponsivePaths: [mountPoint],
+            unreadableMountedPaths: [mountPoint]
+        )
+        let manager = makeManager(
+            runner: runner,
+            directoryQueryReconnectCooldownSeconds: 0.5
+        )
+        let remote = makeRemote(name: "Reconnect Cooldown", mountPoint: mountPoint)
+
+        let initial = await manager.connect(remote: remote, password: nil)
+        XCTAssertEqual(initial.state, .connected)
+
+        // Second connect forces pre-connect cleanup because mount is already active.
+        let reconnect = await manager.connect(remote: remote, password: nil)
+        XCTAssertEqual(reconnect.state, .connected)
+
+        // During cooldown, repeated dir-query failures should stay connected.
+        let first = await manager.refreshStatus(remote: remote)
+        let second = await manager.refreshStatus(remote: remote)
+        let third = await manager.refreshStatus(remote: remote)
+        XCTAssertEqual(first.state, .connected)
+        XCTAssertEqual(second.state, .connected)
+        XCTAssertEqual(third.state, .connected)
+
+        // After cooldown expires, normal strike escalation should resume.
+        try? await Task.sleep(nanoseconds: 650_000_000)
+        let fourth = await manager.refreshStatus(remote: remote)
+        let fifth = await manager.refreshStatus(remote: remote)
+        let sixth = await manager.refreshStatus(remote: remote)
+        XCTAssertEqual(fourth.state, .connected)
+        XCTAssertEqual(fifth.state, .connected)
+        XCTAssertEqual(sixth.state, .error)
+        XCTAssertTrue((sixth.lastError ?? "").localizedCaseInsensitiveContains("stale mount"))
+    }
+
+    /// Beginner note: Diagnostics should expose per-remote directory-query probe counters
+    /// so intermittent stale patterns are obvious in support snapshots.
+    func testRefreshProbeDiagnosticsSummaryReportsDirectoryQueryCounters() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/dir-query-diagnostics-summary"
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            alwaysResponsivePaths: [mountPoint],
+            unreadableMountedPaths: [mountPoint]
+        )
+        let manager = makeManager(
+            runner: runner,
+            directoryQueryReconnectCooldownSeconds: 0
+        )
+        let remote = makeRemote(name: "Diagnostics Summary", mountPoint: mountPoint)
+
+        let connected = await manager.connect(remote: remote, password: nil)
+        XCTAssertEqual(connected.state, .connected)
+
+        _ = await manager.refreshStatus(remote: remote)
+        _ = await manager.refreshStatus(remote: remote)
+        _ = await manager.refreshStatus(remote: remote)
+
+        let summary = await manager.refreshProbeDiagnosticsSummary(remotes: [remote])
+        XCTAssertTrue(summary.contains("timeoutEvents=0"))
+        XCTAssertTrue(summary.contains("deviceNotConfiguredEvents=3"))
+        XCTAssertTrue(summary.contains("staleEscalations=1"))
+        XCTAssertTrue(summary.contains("cooldownSuppressions=0"))
+    }
+
+    private func makeManager(
+        runner: ProcessRunning,
+        directoryQueryReconnectCooldownSeconds: TimeInterval = 30
+    ) -> MountManager {
         let diagnostics = DiagnosticsService()
         let parser = MountStateParser()
         return MountManager(
@@ -422,7 +496,8 @@ final class MountManagerParallelOperationTests: XCTestCase {
             ),
             mountStateParser: parser,
             diagnostics: diagnostics,
-            commandBuilder: MountCommandBuilder(redactionService: RedactionService())
+            commandBuilder: MountCommandBuilder(redactionService: RedactionService()),
+            directoryQueryReconnectCooldownSeconds: directoryQueryReconnectCooldownSeconds
         )
     }
 

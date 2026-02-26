@@ -30,6 +30,7 @@ APP_BUNDLE_PATH="$REPO_ROOT/build/macfuseGui.app"
 APP_BUNDLE_ARM64_PATH="$REPO_ROOT/build/macfuseGui-arm64.app"
 APP_BUNDLE_X86_64_PATH="$REPO_ROOT/build/macfuseGui-x86_64.app"
 CASK_PATH="$REPO_ROOT/Casks/macfusegui.rb"
+RELEASE_NOTES_HEADER_FILE="$REPO_ROOT/scripts/release-notes-header.md"
 VOLNAME="macfuseGui"
 DMG_APP_BUNDLE_NAME="macFUSEGui.app"
 DMG_APPLICATIONS_LINK_NAME="Applications"
@@ -46,6 +47,9 @@ CODE_SIGNING_ALLOWED="${CODE_SIGNING_ALLOWED:-NO}"
 RELEASE_VERSION="${RELEASE_VERSION:-}"
 DRY_RUN=0
 
+CHANGELOG_DIFF_FILTER="${CHANGELOG_DIFF_FILTER:-ACDMRTUXB}"
+CHANGELOG_IGNORED_PATHS_REGEX="${CHANGELOG_IGNORED_PATHS_REGEX:-(^docs/|\\.html$|^scripts/.*\\.sh$|^macfuseguitests?/|^macfuseguitest/)}"
+
 ARCH_OVERRIDE_NORMALIZED=""
 DMG_PATHS=()
 CREATED_DMG_PATHS=()
@@ -56,10 +60,12 @@ CREATED_NOTES_FILE=""
   echo "ERROR: Missing version helpers: $VERSION_LIB" >&2
   exit 1
 }
+[[ -f "$RELEASE_NOTES_HEADER_FILE" ]] || {
+  echo "ERROR: Missing release notes header file: $RELEASE_NOTES_HEADER_FILE" >&2
+  exit 1
+}
 # shellcheck source=scripts/lib/version.sh
 source "$VERSION_LIB"
-
-RELEASE_NOTES=$'Unsigned macOS build (NOT code signed / NOT notarized)\n\nmacOS may block first launch.\n\nRecommended install path (Terminal installer):\n```bash\n/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/ripplethor/macfuseGUI/main/scripts/install_release.sh)"\n```\n\nHomebrew install (tap + cask):\n```bash\nbrew tap ripplethor/macfusegui https://github.com/ripplethor/macfuseGUI\nbrew install --cask ripplethor/macfusegui/macfusegui\n```\n\nDMG fallback:\n1) Open the DMG.\n2) Open Terminal.\n3) Run: /bin/bash "/Volumes/macfuseGui/Install macFUSEGui.command"\n4) The installer copies the app to /Applications, clears quarantine, and opens it.\n\nIf Finder blocks the app anyway, use the direct command shown in INSTALL_IN_TERMINAL.txt inside the DMG.'
 
 write_homebrew_cask() {
   local version="$1"
@@ -93,9 +99,65 @@ end
 EOF_CASK
 }
 
+format_changelog_subject() {
+  local subject="$1"
+  local prefix=""
+  local message=""
+  local kind=""
+
+  if [[ "$subject" == *:* ]]; then
+    prefix="${subject%%:*}"
+    message="${subject#*:}"
+    message="${message#"${message%%[![:space:]]*}"}"
+    kind="${prefix%%(*}"
+
+    case "$kind" in
+      feat) subject="New: ${message}" ;;
+      fix) subject="Fix: ${message}" ;;
+      perf) subject="Performance: ${message}" ;;
+      refactor) subject="Refactor: ${message}" ;;
+      chore|build|ci|style|test) subject="Maintenance: ${message}" ;;
+      docs) subject="Docs: ${message}" ;;
+    esac
+  fi
+
+  printf '%s' "$subject"
+}
+
+changelog_bucket_for_subject() {
+  local subject="$1"
+  local prefix=""
+  local kind=""
+
+  if [[ "$subject" == *:* ]]; then
+    prefix="${subject%%:*}"
+    kind="${prefix%%(*}"
+    if [[ "$kind" == "fix" ]]; then
+      echo "fix"
+      return
+    fi
+  fi
+
+  case "$subject" in
+    [Ff]ix:*|[Ff]ix\ *|[Ff]ix-*) echo "fix" ;;
+    *) echo "other" ;;
+  esac
+}
+
 generate_changelog() {
   local previous_tag="$1"
   local range_ref=""
+  local raw_commits=""
+  local seen_subjects=""
+  local fixes=""
+  local others=""
+  local current_hash=""
+  local current_subject=""
+  local current_is_release=0
+  local current_has_paths=0
+  local current_has_included_paths=0
+  local token=""
+  local had_nocasematch=0
 
   if [[ -n "$previous_tag" ]]; then
     range_ref="${previous_tag}..HEAD"
@@ -103,36 +165,85 @@ generate_changelog() {
     range_ref="HEAD"
   fi
 
-  # Generate deterministic changelog entries from commit subjects.
-  # Exclude:
-  # - auto release commits
-  # - docs:* style commits
-  # - commits that only touch docs/, *.html, scripts/*.sh, or test files
-  git log --no-merges --pretty=format:'%H%x1f%s%n' "$range_ref" | while IFS=$'\x1f' read -r commit_hash subject; do
+  if shopt -q nocasematch; then
+    had_nocasematch=1
+  else
+    shopt -s nocasematch
+  fi
+
+  # Parse commit metadata and changed paths in one git invocation to avoid
+  # spawning an extra git process per commit.
+  while IFS= read -r -d '' token; do
+    if [[ "$token" == *$'\x1f'* ]]; then
+      if [[ -n "$current_hash" && "$current_is_release" -eq 0 && "$current_has_paths" -eq 1 && "$current_has_included_paths" -eq 1 ]]; then
+        raw_commits+="${current_hash}"$'\x1f'"${current_subject}"$'\n'
+      fi
+
+      current_hash="${token%%$'\x1f'*}"
+      current_subject="${token#*$'\x1f'}"
+      current_is_release=0
+      current_has_paths=0
+      current_has_included_paths=0
+
+      if printf '%s\n' "$current_subject" | grep -Eq '^Release[[:space:]]v[0-9]+\.[0-9]+\.[0-9]+$'; then
+        current_is_release=1
+      fi
+      continue
+    fi
+
+    [[ -n "$current_hash" ]] || continue
+    [[ -n "$token" ]] || continue
+
+    current_has_paths=1
+    if [[ ! "$token" =~ $CHANGELOG_IGNORED_PATHS_REGEX ]]; then
+      current_has_included_paths=1
+    fi
+  done < <(
+    git log \
+      --no-merges \
+      --name-only \
+      --diff-filter="$CHANGELOG_DIFF_FILTER" \
+      -z \
+      --pretty=format:'%H%x1f%s%x00' \
+      "$range_ref"
+  )
+
+  if [[ "$had_nocasematch" -eq 0 ]]; then
+    shopt -u nocasematch
+  fi
+
+  if [[ -n "$current_hash" && "$current_is_release" -eq 0 && "$current_has_paths" -eq 1 && "$current_has_included_paths" -eq 1 ]]; then
+    raw_commits+="${current_hash}"$'\x1f'"${current_subject}"$'\n'
+  fi
+
+  while IFS=$'\x1f' read -r commit_hash subject; do
     [[ -n "$commit_hash" ]] || continue
 
-    if printf '%s\n' "$subject" | grep -Eq '^Release[[:space:]]v[0-9]+\.[0-9]+\.[0-9]+$'; then
+    local display_subject
+    display_subject="$(format_changelog_subject "$subject")"
+    if printf '%s\n' "$seen_subjects" | grep -Fqx "$display_subject"; then
       continue
     fi
+    seen_subjects+="${display_subject}"$'\n'
 
-    if printf '%s\n' "$subject" | grep -Eq '^[Dd]ocs(\([^)]*\))?:[[:space:]]'; then
-      continue
+    local entry
+    entry="- ${display_subject} (${commit_hash:0:7})"
+    if [[ "$(changelog_bucket_for_subject "$subject")" == "fix" ]]; then
+      fixes+="${entry}"$'\n'
+    else
+      others+="${entry}"$'\n'
     fi
+  done <<< "$raw_commits"
 
-    local changed_paths
-    changed_paths="$(git diff-tree --no-commit-id --name-only -r "$commit_hash")"
-    if [[ -z "$changed_paths" ]]; then
-      continue
+  if [[ -n "$fixes" ]]; then
+    printf '### Fixes\n\n%s' "$fixes"
+    if [[ -n "$others" ]]; then
+      printf '\n'
     fi
-
-    # Keep mixed commits (for example app code + tests). Skip only if all paths
-    # are in docs/html/scripts/tests-only buckets.
-    if ! printf '%s\n' "$changed_paths" | grep -Eqv '^(docs/|.*\.html$|scripts/.*\.sh$|macfuseGuiTests/|macfuseguitest/)'; then
-      continue
-    fi
-
-    printf -- '- %s (%s)\n' "$subject" "${commit_hash:0:7}"
-  done
+  fi
+  if [[ -n "$others" ]]; then
+    printf '### Other Changes\n\n%s' "$others"
+  fi
 }
 
 write_release_notes_file() {
@@ -143,15 +254,18 @@ write_release_notes_file() {
   changelog="$(generate_changelog "$previous_tag")"
 
   {
-    printf '%s\n\n' "$RELEASE_NOTES"
+    cat "$RELEASE_NOTES_HEADER_FILE"
+    printf '\n\n'
     printf '## Changes\n\n'
     if [[ -n "$previous_tag" ]]; then
-      printf 'Since %s:\n\n' "$previous_tag"
+      printf 'Compared with `%s`.\n\n' "$previous_tag"
+    else
+      printf '%s\n\n' "Initial release context: no previous \`vX.Y.Z\` tag was found on origin, so this changelog summarizes all qualifying commits in repository history."
     fi
     if [[ -n "$changelog" ]]; then
       printf '%s\n' "$changelog"
     else
-      printf '%s\n' "- No changes listed."
+      printf '%s\n' "- No user-facing app changes in this release."
     fi
   } > "$output_path"
 }
@@ -202,8 +316,11 @@ Environment:
   CODE_SIGNING_ALLOWED=YES|NO                Forwarded to build script (default: NO).
   UPDATE_HOMEBREW_CASK=0|1                   Disable/enable cask update (default: 1).
   STRIP_DMG_PAYLOAD=0|1                      Strip staged app executable before DMG create.
+  CHANGELOG_DIFF_FILTER=ACDMRTUXB            Git diff-filter for changelog commit scan.
+  CHANGELOG_IGNORED_PATHS_REGEX=...          Case-insensitive regex for docs-only path filtering.
 
 Notes:
+  Release notes header source: scripts/release-notes-header.md
   Dry-run still enforces a clean git working tree.
 EOF2
 }
