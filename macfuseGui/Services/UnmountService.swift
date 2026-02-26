@@ -484,12 +484,8 @@ final class UnmountService {
         }
 
         let mountedField = fields.dropFirst(5).joined(separator: " ")
-        let decodedMountedField = decodeDFEscapedPath(mountedField)
+        let decodedMountedField = mountStateParser.decodeEscapedMountField(mountedField)
         return URL(fileURLWithPath: decodedMountedField).standardizedFileURL.path
-    }
-
-    private func decodeDFEscapedPath(_ value: String) -> String {
-        value.replacingOccurrences(of: "\\040", with: " ")
     }
 
     /// Beginner note: This method clamps per-command timeouts to the remaining

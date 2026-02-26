@@ -66,7 +66,7 @@ final class MountStateParser {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
-    private func decodeEscapedMountField(_ value: String) -> String {
+    func decodeEscapedMountField(_ value: String) -> String {
         let characters = Array(value)
         var output = String()
         output.reserveCapacity(characters.count)
