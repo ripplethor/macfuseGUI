@@ -4,7 +4,7 @@ set -euo pipefail
 # scripts/build_docs.sh
 # Run from repo root: ./scripts/build_docs.sh
 #
-# Builds the static docs CSS bundle and runs docs validation by default.
+# Builds minified static docs assets and runs docs validation by default.
 # Set SKIP_DOCS_CHECK=1 to skip the validation step.
 # Set FORCE_NPM_INSTALL=1 to refresh node_modules before building.
 
@@ -38,8 +38,8 @@ ensure_dependencies() {
 require_cmd npm
 ensure_dependencies
 
-echo "Building static docs CSS..."
-(cd "$ROOT_DIR" && npm run docs:build-css)
+echo "Building minified static docs assets..."
+(cd "$ROOT_DIR" && npm run docs:build)
 
 if [[ "${SKIP_DOCS_CHECK:-0}" != "1" ]]; then
   echo "Running docs checks..."

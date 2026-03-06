@@ -31,7 +31,7 @@ State is toggled via the button with `id="theme-toggle"`.
 
 ## Development
 
-The site stays fully static, but Tailwind CSS is now compiled ahead of time for production delivery.
+The site stays fully static, but Tailwind CSS is compiled ahead of time for production delivery and the docs HTML is minified during the build step.
 Source and output files:
 
 - `tailwind.input.css`: Tailwind input with the custom dark variant and docs-relative source scanning.
@@ -41,7 +41,7 @@ Useful commands from the repo root:
 
 ```bash
 npm install
-npm run docs:build-css
+npm run docs:build
 npm run docs:check
 ```
 

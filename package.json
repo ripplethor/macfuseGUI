@@ -2,12 +2,15 @@
   "name": "macfusegui-docs",
   "private": true,
   "scripts": {
+    "docs:build": "npm run docs:build-css && npm run docs:minify-html",
     "docs:build-css": "npx @tailwindcss/cli -i ./docs/assets/tailwind.input.css -o ./docs/assets/tailwind.generated.css --minify",
+    "docs:minify-html": "node ./scripts/minify_docs_html.mjs",
     "docs:watch-css": "npx @tailwindcss/cli -i ./docs/assets/tailwind.input.css -o ./docs/assets/tailwind.generated.css --watch",
     "docs:check": "python3 scripts/check_docs_seo.py"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.1.13",
+    "html-minifier-terser": "^7.2.0",
     "tailwindcss": "^4.1.13"
   }
 }
