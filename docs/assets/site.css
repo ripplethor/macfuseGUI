@@ -51,8 +51,8 @@ body {
 /* Elite Glassmorphism */
 .glass-panel {
     background: rgba(255, 255, 255, 0.82);
-    backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
     border: 1px solid rgba(255, 255, 255, 0.72);
     box-shadow: 0 10px 34px 0 rgba(22, 51, 116, 0.10);
 }
@@ -164,13 +164,13 @@ html.dark[data-fx-mode="lite"] .star-glints {
 }
 
 html[data-fx-mode="lite"] .glass-panel {
-    backdrop-filter: blur(12px) saturate(140%);
     -webkit-backdrop-filter: blur(12px) saturate(140%);
+    backdrop-filter: blur(12px) saturate(140%);
 }
 
 html[data-fx-mode="lite"] header[data-scrolled="true"] {
-    backdrop-filter: blur(14px) saturate(150%);
     -webkit-backdrop-filter: blur(14px) saturate(150%);
+    backdrop-filter: blur(14px) saturate(150%);
 }
 
 html[data-fx-mode="lite"] .hero-stage {

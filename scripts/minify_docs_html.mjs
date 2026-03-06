@@ -16,7 +16,7 @@ const minifyOptions = {
   decodeEntities: true,
   keepClosingSlash: true,
   minifyCSS: true,
-  minifyJS: true,
+  minifyJS: false,
   preserveLineBreaks: false,
   processConditionalComments: false,
   removeAttributeQuotes: false,
@@ -30,16 +30,31 @@ const minifyOptions = {
   useShortDoctype: true
 };
 
-const htmlFiles = (await readdir(docsDir))
-  .filter((name) => name.endsWith(".html"))
-  .sort();
+async function collectHtmlFiles(dirPath) {
+  const entries = await readdir(dirPath, { withFileTypes: true });
+  const files = [];
+
+  for (const entry of entries) {
+    const entryPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await collectHtmlFiles(entryPath)));
+      continue;
+    }
+    if (entry.name.endsWith(".html")) {
+      files.push(entryPath);
+    }
+  }
+
+  return files.sort();
+}
+
+const htmlFiles = await collectHtmlFiles(docsDir);
 
 if (htmlFiles.length === 0) {
   throw new Error(`No HTML files found in ${docsDir}`);
 }
 
-for (const fileName of htmlFiles) {
-  const filePath = path.join(docsDir, fileName);
+for (const filePath of htmlFiles) {
   const source = await readFile(filePath, "utf8");
   const minified = await minify(source, minifyOptions);
   await writeFile(filePath, `${minified}\n`, "utf8");

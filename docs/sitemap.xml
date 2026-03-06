@@ -1,33 +1,603 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://www.macfusegui.app/</loc>
     <lastmod>2026-03-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/zh-hans/</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/ja/</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/de/</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/fr/</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/pt-br/</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/es/</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/ko/</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/" />
   </url>
   <url>
     <loc>https://www.macfusegui.app/macfuse-gui.html</loc>
     <lastmod>2026-03-06</lastmod>
     <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/macfuse-gui.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/zh-hans/macfuse-gui.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/macfuse-gui.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/ja/macfuse-gui.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/macfuse-gui.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/de/macfuse-gui.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/macfuse-gui.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/fr/macfuse-gui.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/macfuse-gui.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/pt-br/macfuse-gui.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/macfuse-gui.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/es/macfuse-gui.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/macfuse-gui.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/ko/macfuse-gui.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/macfuse-gui.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/macfuse-gui.html" />
   </url>
   <url>
     <loc>https://www.macfusegui.app/sshfs-gui-mac.html</loc>
     <lastmod>2026-03-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/sshfs-gui-mac.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/zh-hans/sshfs-gui-mac.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/sshfs-gui-mac.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/ja/sshfs-gui-mac.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/sshfs-gui-mac.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/de/sshfs-gui-mac.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/sshfs-gui-mac.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/fr/sshfs-gui-mac.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/sshfs-gui-mac.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/pt-br/sshfs-gui-mac.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/sshfs-gui-mac.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/es/sshfs-gui-mac.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/sshfs-gui-mac.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/ko/sshfs-gui-mac.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/sshfs-gui-mac.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/sshfs-gui-mac.html" />
   </url>
   <url>
     <loc>https://www.macfusegui.app/install-macfuse-sshfs-mac.html</loc>
     <lastmod>2026-03-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/install-macfuse-sshfs-mac.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/zh-hans/install-macfuse-sshfs-mac.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/install-macfuse-sshfs-mac.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/ja/install-macfuse-sshfs-mac.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/install-macfuse-sshfs-mac.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/de/install-macfuse-sshfs-mac.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/install-macfuse-sshfs-mac.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/fr/install-macfuse-sshfs-mac.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/install-macfuse-sshfs-mac.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/pt-br/install-macfuse-sshfs-mac.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/install-macfuse-sshfs-mac.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/es/install-macfuse-sshfs-mac.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/install-macfuse-sshfs-mac.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/ko/install-macfuse-sshfs-mac.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/install-macfuse-sshfs-mac.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/install-macfuse-sshfs-mac.html" />
   </url>
   <url>
     <loc>https://www.macfusegui.app/macfusegui-troubleshooting.html</loc>
     <lastmod>2026-03-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/macfusegui-troubleshooting.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/zh-hans/macfusegui-troubleshooting.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/macfusegui-troubleshooting.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/ja/macfusegui-troubleshooting.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/macfusegui-troubleshooting.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/de/macfusegui-troubleshooting.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/macfusegui-troubleshooting.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/fr/macfusegui-troubleshooting.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/macfusegui-troubleshooting.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/pt-br/macfusegui-troubleshooting.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/macfusegui-troubleshooting.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/es/macfusegui-troubleshooting.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/macfusegui-troubleshooting.html" />
+  </url>
+  <url>
+    <loc>https://www.macfusegui.app/ko/macfusegui-troubleshooting.html</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.macfusegui.app/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.macfusegui.app/zh-hans/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.macfusegui.app/ja/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.macfusegui.app/de/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.macfusegui.app/fr/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://www.macfusegui.app/pt-br/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.macfusegui.app/es/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.macfusegui.app/ko/macfusegui-troubleshooting.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.macfusegui.app/macfusegui-troubleshooting.html" />
   </url>
 </urlset>
