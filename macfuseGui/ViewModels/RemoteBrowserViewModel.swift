@@ -462,10 +462,17 @@ final class RemoteBrowserViewModel: ObservableObject {
                 }
                 let latest = await remotesViewModel.browserHealth(sessionID: sessionID)
                 health = latest
-                // If backend moved to reconnecting while UI looked ready, reflect it.
-                if latest.state == .reconnecting && viewState == .ready {
-                    viewState = .recovering
-                }
+                let projection = Self.projectPolledHealth(
+                    latest,
+                    currentViewState: viewState,
+                    hasEntries: !entries.isEmpty,
+                    isConfirmedEmpty: isConfirmedEmpty,
+                    isStale: isStale,
+                    statusMessage: statusMessage
+                )
+                viewState = projection.viewState
+                isStale = projection.isStale
+                statusMessage = projection.statusMessage
             }
         }
     }
@@ -497,4 +504,27 @@ final class RemoteBrowserViewModel: ObservableObject {
         formatter.timeStyle = .medium
         return formatter
     }()
+
+    nonisolated static func projectPolledHealth(
+        _ latest: BrowserConnectionHealth,
+        currentViewState: BrowserViewState,
+        hasEntries: Bool,
+        isConfirmedEmpty: Bool,
+        isStale: Bool,
+        statusMessage: String?
+    ) -> (viewState: BrowserViewState, isStale: Bool, statusMessage: String?) {
+        switch latest.state {
+        case .healthy:
+            let resolvedViewState = (hasEntries || isConfirmedEmpty) ? BrowserViewState.ready : currentViewState
+            return (resolvedViewState, false, nil)
+        case .degraded:
+            return (hasEntries ? .degradedWithCache : .recovering, true, statusMessage)
+        case .reconnecting, .connecting:
+            return (.recovering, true, statusMessage)
+        case .failed:
+            return (hasEntries ? .degradedWithCache : .fatal, true, statusMessage)
+        case .closed:
+            return (currentViewState, isStale, statusMessage)
+        }
+    }
 }
