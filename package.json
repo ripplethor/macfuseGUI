@@ -1,0 +1,13 @@
+{
+  "name": "macfusegui-docs",
+  "private": true,
+  "scripts": {
+    "docs:build-css": "npx @tailwindcss/cli -i ./docs/assets/tailwind.input.css -o ./docs/assets/tailwind.generated.css --minify",
+    "docs:watch-css": "npx @tailwindcss/cli -i ./docs/assets/tailwind.input.css -o ./docs/assets/tailwind.generated.css --watch",
+    "docs:check": "python3 scripts/check_docs_seo.py"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.13",
+    "tailwindcss": "^4.1.13"
+  }
+}

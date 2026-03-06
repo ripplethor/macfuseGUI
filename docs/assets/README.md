@@ -31,7 +31,20 @@ State is toggled via the button with `id="theme-toggle"`.
 
 ## Development
 
-The site is built with Tailwind CSS v4 via CDN for simplicity and no-build deployment.
+The site stays fully static, but Tailwind CSS is now compiled ahead of time for production delivery.
+Source and output files:
+
+- `tailwind.input.css`: Tailwind input with the custom dark variant and docs-relative source scanning.
+- `tailwind.generated.css`: compiled utility CSS committed alongside the static site output.
+
+Useful commands from the repo root:
+
+```bash
+npm install
+npm run docs:build-css
+npm run docs:check
+```
+
 All asset paths must stay **relative** (e.g., `assets/site.css`, not `/assets/site.css`) so the site works in both:
 - custom-domain root hosting (current production: `https://www.macfusegui.app/`)
 - GitHub Pages subdirectory previews (for example `/macfuseGui/`)

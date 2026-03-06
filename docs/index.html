@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>macFUSE GUI for macOS - SSHFS Menu Bar App</title>
-    <meta name="description" content="macFUSE GUI for macOS: a native menu bar app to manage SSHFS mounts with macFUSE. Secure Keychain storage, auto-reconnect, and separate Apple Silicon and Intel builds.">
+    <title>macFUSE GUI for macOS | SSHFS Menu Bar App</title>
+    <meta name="description" content="macFUSE GUI for macOS: manage SSHFS mounts from the menu bar with Keychain-backed credentials, recovery after sleep or network loss, and separate Apple Silicon and Intel builds.">
     <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
     <meta name="application-name" content="macFUSEGui">
     <link rel="canonical" href="https://www.macfusegui.app/">
@@ -27,20 +27,21 @@
     <meta property="og:url" content="https://www.macfusegui.app/">
     <meta property="og:site_name" content="macFUSEGui">
     <meta property="og:locale" content="en_US">
-    <meta property="og:title" content="macFUSE GUI for macOS - SSHFS Menu Bar App">
-    <meta property="og:description" content="A native macFUSE GUI for SSHFS on macOS. Manage multiple remotes, recover after sleep/wake, and keep credentials in Keychain.">
+    <meta property="og:title" content="macFUSE GUI for macOS | SSHFS Menu Bar App">
+    <meta property="og:description" content="A native menu bar app for SSHFS on macOS with Keychain-backed credentials, per-remote controls, and recovery after sleep or network changes.">
     <meta property="og:image" content="https://www.macfusegui.app/assets/og-image.webp">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:alt" content="Preview card for macFUSEGui, a macOS menu bar app for SSHFS mounts">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://www.macfusegui.app/">
-    <meta property="twitter:title" content="macFUSE GUI for macOS - SSHFS Menu Bar App">
-    <meta property="twitter:description" content="A native macFUSE GUI for SSHFS on macOS with Keychain-backed auth, per-remote controls, and recovery automation.">
+    <meta property="twitter:title" content="macFUSE GUI for macOS | SSHFS Menu Bar App">
+    <meta property="twitter:description" content="A native menu bar app for SSHFS on macOS with Keychain-backed auth, per-remote controls, and recovery automation.">
     <meta property="twitter:image" content="https://www.macfusegui.app/assets/og-image.webp">
-    <meta property="twitter:image:alt" content="macFUSEGui app icon and tagline on a dark nebula background">
+    <meta property="twitter:image:alt" content="Preview card for macFUSEGui, a macOS menu bar app for SSHFS mounts">
 
     <!-- Structured Data -->
     <script type="application/ld+json">
@@ -167,14 +168,8 @@
         })();
     </script>
 
-    <!-- Tailwind v4 browser runtime -->
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <style type="text/tailwindcss">
-        @custom-variant dark (&:where(.dark, .dark *));
- </style>
-
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="assets/site.css?v=20260226-775">
+    <link rel="stylesheet" href="assets/tailwind.generated.css?v=20260306-01">
+    <link rel="stylesheet" href="assets/site.css?v=20260306-01">
     <noscript>
         <style>
             .faq-panel {
@@ -224,7 +219,7 @@
                 <div class="flex items-center space-x-3 group cursor-default">
                     <div
                         class="relative w-9 h-9 rounded-xl ring-1 ring-white/25 shadow-[0_8px_20px_rgba(8,25,66,0.35)] overflow-hidden">
-                        <img src="assets/brand-icon.webp" alt="" class="w-full h-full object-cover" />
+                        <img src="assets/brand-icon.webp" alt="" width="36" height="36" decoding="async" class="w-full h-full object-cover" />
                     </div>
                     <span class="font-bold text-xl tracking-tight text-gray-900 dark:text-white">macFUSE<span
                             class="text-blue-600 dark:text-blue-400">Gui</span></span>
@@ -236,6 +231,8 @@
                         class="hover:text-blue-600 dark:hover:text-blue-400">Features</a>
                     <a href="#install"
                         class="hover:text-blue-600 dark:hover:text-blue-400">Install</a>
+                    <a href="#guides"
+                        class="hover:text-blue-600 dark:hover:text-blue-400">Guides</a>
                     <a href="#how-it-works"
                         class="hover:text-blue-600 dark:hover:text-blue-400">How it
                         works</a>
@@ -288,12 +285,12 @@
                         (arm64) and Intel (x86_64) builds.
                     </p>
                     <p class="mt-1 max-w-3xl mx-auto text-base sm:text-lg text-gray-600 dark:text-gray-300 leading-relaxed">
-                        Looking for a <strong>macFUSE GUI</strong> for macOS? macFUSEGui provides a reliable SSHFS GUI with per-remote controls, auto-reconnect, and Keychain-backed credentials.
+                        Looking for a <strong>macFUSE GUI</strong> for macOS? macFUSEGui gives you a native SSHFS workflow with per-remote controls, Keychain-backed credentials, diagnostics, and recovery after sleep, wake, and network changes.
                     </p>
-                    <p class="mt-3">
-                        <a href="macfuse-gui.html" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-semibold">
-                            Read the macFUSE GUI quick guide
-                        </a>
+                    <p class="mt-3 max-w-3xl mx-auto text-sm sm:text-base text-gray-600 dark:text-gray-300 leading-relaxed">
+                        Start with the <a href="macfuse-gui.html" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-semibold">macFUSE GUI guide</a>,
+                        jump to the <a href="install-macfuse-sshfs-mac.html" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-semibold">install walkthrough</a>,
+                        or use the <a href="macfusegui-troubleshooting.html" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-semibold">troubleshooting guide</a> when mounts fail.
                     </p>
 
                     <div class="mt-10 flex justify-center gap-4 mb-20">
@@ -320,6 +317,7 @@
                             View Source
                         </a>
                     </div>
+
                 </div>
 
                 <!-- Product Visualization (Desktop Scene) -->
@@ -381,7 +379,7 @@
                                     <div
                                         class="bg-[#2d2d2d] rounded-lg p-3 border border-white/5 relative group hover:bg-[#333]">
                                         <div class="flex justify-between items-start mb-1">
-                                            <h3 class="text-white font-bold text-xs">Production DB</h3>
+                                            <div class="text-white font-bold text-xs">Production DB</div>
                                             <span
                                                 class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-green-500/20 text-green-400 border border-green-500/20">Connected</span>
                                         </div>
@@ -398,7 +396,7 @@
 
                                     <div class="bg-[#2d2d2d] rounded-lg p-3 border border-white/5 relative opacity-60">
                                         <div class="flex justify-between items-start mb-1">
-                                            <h3 class="text-white font-bold text-xs">Staging Assets</h3>
+                                            <div class="text-white font-bold text-xs">Staging Assets</div>
                                             <span
                                                 class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-gray-500/20 text-gray-400 border border-gray-500/20">Offline</span>
                                         </div>
@@ -574,6 +572,40 @@
                         </div>
                     </div>
                 </div>
+
+                <section id="guides" class="max-w-5xl mx-auto mt-20 text-left">
+                    <div class="glass-panel rounded-3xl p-8 sm:p-10">
+                        <div class="max-w-3xl">
+                            <p class="text-sm font-semibold uppercase tracking-[0.24em] text-blue-600 dark:text-blue-400">Guides</p>
+                            <h2 class="mt-3 text-3xl sm:text-4xl font-black tracking-tight text-gray-900 dark:text-white">Choose the guide that matches your search intent</h2>
+                            <p class="mt-4 text-lg text-gray-600 dark:text-gray-300 leading-relaxed">
+                                The home page explains the product. These focused guides cover exact-match searches, SSHFS GUI workflows on Mac, installation steps, and troubleshooting.
+                            </p>
+                        </div>
+                        <div class="mt-8 grid gap-4 md:grid-cols-2">
+                            <a href="macfuse-gui.html" class="glass-panel rounded-2xl p-6 border border-white/15 hover:border-blue-400/40 transition-colors">
+                                <p class="text-sm font-semibold text-blue-600 dark:text-blue-400">Exact-match guide</p>
+                                <h3 class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">macFUSE GUI for macOS</h3>
+                                <p class="mt-3 text-gray-600 dark:text-gray-300 leading-relaxed">What a macFUSE GUI does, how macFUSEGui fits above macFUSE and sshfs, and when to use it instead of raw CLI mounts.</p>
+                            </a>
+                            <a href="sshfs-gui-mac.html" class="glass-panel rounded-2xl p-6 border border-white/15 hover:border-blue-400/40 transition-colors">
+                                <p class="text-sm font-semibold text-blue-600 dark:text-blue-400">Workflow guide</p>
+                                <h3 class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">SSHFS GUI for Mac</h3>
+                                <p class="mt-3 text-gray-600 dark:text-gray-300 leading-relaxed">Compare CLI SSHFS with a GUI-first workflow and see when Finder-mounted remote folders beat a command-only setup.</p>
+                            </a>
+                            <a href="install-macfuse-sshfs-mac.html" class="glass-panel rounded-2xl p-6 border border-white/15 hover:border-blue-400/40 transition-colors">
+                                <p class="text-sm font-semibold text-blue-600 dark:text-blue-400">Install guide</p>
+                                <h3 class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">Install macFUSE and SSHFS on Mac</h3>
+                                <p class="mt-3 text-gray-600 dark:text-gray-300 leading-relaxed">Step through prerequisites, architecture choice, first launch, and the fastest path to your first successful remote mount.</p>
+                            </a>
+                            <a href="macfusegui-troubleshooting.html" class="glass-panel rounded-2xl p-6 border border-white/15 hover:border-blue-400/40 transition-colors">
+                                <p class="text-sm font-semibold text-blue-600 dark:text-blue-400">Support guide</p>
+                                <h3 class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">macFUSEGui Troubleshooting</h3>
+                                <p class="mt-3 text-gray-600 dark:text-gray-300 leading-relaxed">Fix common install, auth, mount-point, and recovery issues before you fall back to manual unmounting or reinstalling.</p>
+                            </a>
+                        </div>
+                    </div>
+                </section>
             </div>
         </section>
 
