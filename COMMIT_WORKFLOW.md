@@ -11,7 +11,8 @@ message format matters.
 Before committing, always verify the build is clean:
 
 ```bash
-python3 scripts/audit_mount_calls.py && \
+ARCH_OVERRIDE=arm64 ./scripts/build.sh && \
+  python3 scripts/audit_mount_calls.py && \
   xcodebuild -project macfuseGui.xcodeproj \
     -scheme macfuseGui \
     -configuration Debug \

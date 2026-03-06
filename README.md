@@ -186,18 +186,21 @@ ARCH_OVERRIDE=x86_64 ./scripts/release.sh
 ## Xcode CLI Fallback
 
 ```bash
+ARCH_OVERRIDE=arm64 ./scripts/build.sh
 xcodebuild -project macfuseGui.xcodeproj -scheme macfuseGui -configuration Debug -derivedDataPath build/DerivedData build
 ```
 
 ## Run Tests
 
 ```bash
+ARCH_OVERRIDE=arm64 ./scripts/build.sh
 xcodebuild -project macfuseGui.xcodeproj -scheme macfuseGui -configuration Debug -derivedDataPath build/DerivedData -destination 'platform=macOS,arch=arm64' test CODE_SIGNING_ALLOWED=NO
 ```
 
 ## Reliability Gate
 
 ```bash
+ARCH_OVERRIDE=arm64 ./scripts/build.sh
 scripts/audit_mount_calls.py && xcodebuild -project macfuseGui.xcodeproj -scheme macfuseGui -configuration Debug -derivedDataPath build/DerivedData -destination 'platform=macOS,arch=arm64' test CODE_SIGNING_ALLOWED=NO
 ```
 

@@ -31,6 +31,7 @@ From repo root:
 Before finishing a change, run:
 
 ```bash
+ARCH_OVERRIDE=arm64 ./scripts/build.sh
 scripts/audit_mount_calls.py && xcodebuild -project macfuseGui.xcodeproj -scheme macfuseGui -configuration Debug -derivedDataPath build/DerivedData -destination 'platform=macOS,arch=arm64' test CODE_SIGNING_ALLOWED=NO
 ```
 

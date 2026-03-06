@@ -509,8 +509,8 @@ App output:
   - `build/DerivedData-universal`
 
 Tests:
-- `xcodebuild ... test CODE_SIGNING_ALLOWED=NO`
-- Reliability gate: `scripts/audit_mount_calls.py && xcodebuild -project macfuseGui.xcodeproj -scheme macfuseGui -configuration Debug -derivedDataPath build/DerivedData -destination 'platform=macOS,arch=arm64' test CODE_SIGNING_ALLOWED=NO`
+- `ARCH_OVERRIDE=arm64 ./scripts/build.sh` then `xcodebuild ... test CODE_SIGNING_ALLOWED=NO`
+- Reliability gate: `ARCH_OVERRIDE=arm64 ./scripts/build.sh && scripts/audit_mount_calls.py && xcodebuild -project macfuseGui.xcodeproj -scheme macfuseGui -configuration Debug -derivedDataPath build/DerivedData -destination 'platform=macOS,arch=arm64' test CODE_SIGNING_ALLOWED=NO`
 - After tests complete, remove temporary DerivedData roots under `build/` (for example: `build/DerivedData*`) to keep the workspace clean.
 - Key tests cover:
   - Remote store legacy defaults/new fields
