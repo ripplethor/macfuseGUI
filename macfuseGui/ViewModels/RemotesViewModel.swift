@@ -339,7 +339,7 @@ final class RemotesViewModel: ObservableObject {
     func load() {
         do {
             // Load persisted remotes from disk, then keep UI list order stable.
-            remotes = try remoteStore.load().sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            remotes = Self.sortedRemotes(try remoteStore.load())
             if selectedRemoteID == nil {
                 selectedRemoteID = remotes.first?.id
             }
@@ -356,6 +356,21 @@ final class RemotesViewModel: ObservableObject {
         } catch {
             alertMessage = error.localizedDescription
             diagnostics.append(level: .error, category: "store", message: error.localizedDescription)
+        }
+    }
+
+    nonisolated static func sortedRemotes(_ remotes: [RemoteConfig]) -> [RemoteConfig] {
+        remotes.sorted { lhs, rhs in
+            if lhs.isFavorite != rhs.isFavorite {
+                return lhs.isFavorite && !rhs.isFavorite
+            }
+
+            let nameComparison = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName)
+            if nameComparison != .orderedSame {
+                return nameComparison == .orderedAscending
+            }
+
+            return lhs.id.uuidString < rhs.id.uuidString
         }
     }
 
@@ -573,6 +588,34 @@ final class RemotesViewModel: ObservableObject {
         } catch {
             diagnostics.append(level: .error, category: "store", message: error.localizedDescription)
             return [error.localizedDescription]
+        }
+    }
+
+    func toggleFavorite(remoteID: UUID) {
+        guard let index = remotes.firstIndex(where: { $0.id == remoteID }) else {
+            return
+        }
+
+        let existing = remotes[index]
+        var updatedRemote = existing
+        updatedRemote.isFavorite.toggle()
+
+        do {
+            try remoteStore.upsert(updatedRemote)
+            remotes[index] = updatedRemote
+            remotes = Self.sortedRemotes(remotes)
+            diagnostics.append(
+                level: .info,
+                category: "store",
+                message: "\(updatedRemote.isFavorite ? "Favorited" : "Unfavorited") remote \(updatedRemote.displayName)"
+            )
+        } catch {
+            alertMessage = error.localizedDescription
+            diagnostics.append(
+                level: .error,
+                category: "store",
+                message: "Failed to update favorite for \(existing.displayName): \(error.localizedDescription)"
+            )
         }
     }
 

@@ -32,6 +32,7 @@ final class RemoteStoreTests: XCTestCase {
             privateKeyPath: "/Users/test/.ssh/id_ed25519",
             remoteDirectory: "/srv",
             localMountPoint: tempDir.path,
+            isFavorite: true,
             autoConnectOnLaunch: true,
             favoriteRemoteDirectories: ["/srv", "/srv/projects"],
             recentRemoteDirectories: ["/srv/projects", "/srv"]
@@ -43,6 +44,7 @@ final class RemoteStoreTests: XCTestCase {
         XCTAssertEqual(loaded.count, 1)
         XCTAssertEqual(loaded.first?.displayName, "Test")
         XCTAssertEqual(loaded.first?.host, "example.com")
+        XCTAssertEqual(loaded.first?.isFavorite, true)
         XCTAssertEqual(loaded.first?.autoConnectOnLaunch, true)
         XCTAssertEqual(loaded.first?.favoriteRemoteDirectories, ["/srv", "/srv/projects"])
         XCTAssertEqual(loaded.first?.recentRemoteDirectories, ["/srv/projects", "/srv"])
@@ -84,6 +86,7 @@ final class RemoteStoreTests: XCTestCase {
         XCTAssertEqual(loaded.count, 1)
         XCTAssertEqual(loaded[0].id, remoteID)
         XCTAssertEqual(loaded[0].displayName, "Legacy Remote")
+        XCTAssertFalse(loaded[0].isFavorite)
         XCTAssertFalse(loaded[0].autoConnectOnLaunch)
         XCTAssertEqual(loaded[0].favoriteRemoteDirectories, [])
         XCTAssertEqual(loaded[0].recentRemoteDirectories, [])

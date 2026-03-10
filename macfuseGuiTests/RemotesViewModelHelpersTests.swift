@@ -45,6 +45,19 @@ final class RemotesViewModelHelpersTests: XCTestCase {
         XCTAssertEqual(selectedIDs, [remotes[0].id, remotes[2].id])
     }
 
+    func testSortedRemotesPlacesFavoritesFirstThenAlphabetical() {
+        let remotes = [
+            makeRemote(name: "Zulu", autoConnect: false, isFavorite: false),
+            makeRemote(name: "Bravo", autoConnect: false, isFavorite: true),
+            makeRemote(name: "Alpha", autoConnect: false, isFavorite: false),
+            makeRemote(name: "Charlie", autoConnect: false, isFavorite: true)
+        ]
+
+        let sorted = RemotesViewModel.sortedRemotes(remotes)
+
+        XCTAssertEqual(sorted.map(\.displayName), ["Bravo", "Charlie", "Alpha", "Zulu"])
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     func testNormalizeRemotePathFixesWindowsDoubleColonArtifacts() {
         XCTAssertEqual(RemotesViewModel.normalizeRemotePathForMemory("/D::"), "/D:/")
@@ -352,7 +365,7 @@ final class RemotesViewModelHelpersTests: XCTestCase {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
-    private func makeRemote(name: String, autoConnect: Bool) -> RemoteConfig {
+    private func makeRemote(name: String, autoConnect: Bool, isFavorite: Bool = false) -> RemoteConfig {
         RemoteConfig(
             displayName: name,
             host: "example.com",
@@ -362,6 +375,7 @@ final class RemotesViewModelHelpersTests: XCTestCase {
             privateKeyPath: "/Users/dev/.ssh/id_ed25519",
             remoteDirectory: "/srv",
             localMountPoint: "/tmp/\(name.lowercased())",
+            isFavorite: isFavorite,
             autoConnectOnLaunch: autoConnect
         )
     }

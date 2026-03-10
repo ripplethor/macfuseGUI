@@ -20,6 +20,7 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Hashable, Sendable {
     var privateKeyPath: String?
     var remoteDirectory: String
     var localMountPoint: String
+    var isFavorite: Bool
     var autoConnectOnLaunch: Bool
     // Persisted per-remote path memory; normalization and limits are enforced by RemotesViewModel.
     var favoriteRemoteDirectories: [String]
@@ -51,6 +52,7 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Hashable, Sendable {
         case privateKeyPath
         case remoteDirectory
         case localMountPoint
+        case isFavorite
         case autoConnectOnLaunch
         case favoriteRemoteDirectories
         case recentRemoteDirectories
@@ -67,6 +69,7 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Hashable, Sendable {
         privateKeyPath: String? = nil,
         remoteDirectory: String,
         localMountPoint: String,
+        isFavorite: Bool = false,
         autoConnectOnLaunch: Bool = false,
         favoriteRemoteDirectories: [String] = [],
         recentRemoteDirectories: [String] = []
@@ -80,6 +83,7 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Hashable, Sendable {
         self.privateKeyPath = privateKeyPath
         self.remoteDirectory = remoteDirectory
         self.localMountPoint = localMountPoint
+        self.isFavorite = isFavorite
         self.autoConnectOnLaunch = autoConnectOnLaunch
         self.favoriteRemoteDirectories = Self.cappedPathMemory(
             favoriteRemoteDirectories,
@@ -105,6 +109,7 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Hashable, Sendable {
         privateKeyPath = try container.decodeIfPresent(String.self, forKey: .privateKeyPath)
         remoteDirectory = try container.decodeIfPresent(String.self, forKey: .remoteDirectory) ?? "/"
         localMountPoint = try container.decodeIfPresent(String.self, forKey: .localMountPoint) ?? ""
+        isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
         autoConnectOnLaunch = try container.decodeIfPresent(Bool.self, forKey: .autoConnectOnLaunch) ?? false
         let decodedFavorites = try container.decodeIfPresent([String].self, forKey: .favoriteRemoteDirectories) ?? []
         let decodedRecents = try container.decodeIfPresent([String].self, forKey: .recentRemoteDirectories) ?? []
@@ -125,6 +130,7 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Hashable, Sendable {
         try container.encodeIfPresent(privateKeyPath, forKey: .privateKeyPath)
         try container.encode(remoteDirectory, forKey: .remoteDirectory)
         try container.encode(localMountPoint, forKey: .localMountPoint)
+        try container.encode(isFavorite, forKey: .isFavorite)
         try container.encode(autoConnectOnLaunch, forKey: .autoConnectOnLaunch)
         try container.encode(favoriteRemoteDirectories, forKey: .favoriteRemoteDirectories)
         try container.encode(recentRemoteDirectories, forKey: .recentRemoteDirectories)
@@ -140,6 +146,7 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Hashable, Sendable {
             .path,
         remoteDirectory: "/srv/data",
         localMountPoint: "/Volumes/example",
+        isFavorite: false,
         autoConnectOnLaunch: false,
         favoriteRemoteDirectories: [],
         recentRemoteDirectories: []
@@ -160,6 +167,7 @@ struct RemoteDraft: Equatable, Sendable {
     var password: String = ""
     var remoteDirectory: String = "/"
     var localMountPoint: String = ""
+    var isFavorite: Bool = false
     var autoConnectOnLaunch: Bool = false
     var favoriteRemoteDirectories: [String] = []
     var recentRemoteDirectories: [String] = []
@@ -214,6 +222,7 @@ struct RemoteDraft: Equatable, Sendable {
             privateKeyPath: trimmedPrivateKeyPath.isEmpty ? nil : trimmedPrivateKeyPath,
             remoteDirectory: trimmedRemoteDirectory,
             localMountPoint: trimmedLocalMountPoint,
+            isFavorite: isFavorite,
             autoConnectOnLaunch: autoConnectOnLaunch,
             favoriteRemoteDirectories: cappedFavorites,
             recentRemoteDirectories: cappedRecents
@@ -234,6 +243,7 @@ extension RemoteDraft {
         self.password = password
         self.remoteDirectory = remote.remoteDirectory
         self.localMountPoint = remote.localMountPoint
+        self.isFavorite = remote.isFavorite
         self.autoConnectOnLaunch = remote.autoConnectOnLaunch
         self.favoriteRemoteDirectories = remote.favoriteRemoteDirectories
         self.recentRemoteDirectories = remote.recentRemoteDirectories

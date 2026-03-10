@@ -180,6 +180,7 @@ final class MenuBarController: NSObject {
             onCopyDiagnostics: { [weak self] in self?.copyDiagnostics() },
             onConnect: { [weak self] remoteID in self?.connectRemote(remoteID) },
             onDisconnect: { [weak self] remoteID in self?.disconnectRemote(remoteID) },
+            onToggleFavorite: { [weak self] remoteID in self?.viewModel.toggleFavorite(remoteID: remoteID) },
             onOpenInPreferredEditor: { [weak self] remoteID in self?.openRemoteMountInPreferredEditor(remoteID) },
             onOpenInEditorPlugin: { [weak self] remoteID, pluginID in self?.openRemoteMountInEditor(remoteID, pluginID: pluginID) },
             onForceResetMounts: { [weak self] in self?.forceResetAllMounts() },
@@ -594,6 +595,7 @@ final class MenuBarController: NSObject {
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 private struct MenuPopoverContentView: View {
     @AppStorage("menuPopover.usesCompactRemoteRows") private var usesCompactRemoteRows = false
+    @State private var activeStatusFilter: MenuPopoverStatusFilter?
 
     @ObservedObject var viewModel: RemotesViewModel
     @ObservedObject var editorPluginRegistry: EditorPluginRegistry
@@ -603,6 +605,7 @@ private struct MenuPopoverContentView: View {
     let onCopyDiagnostics: () -> Void
     let onConnect: (UUID) -> Void
     let onDisconnect: (UUID) -> Void
+    let onToggleFavorite: (UUID) -> Void
     let onOpenInPreferredEditor: (UUID) -> Void
     let onOpenInEditorPlugin: (UUID, String) -> Void
     let onForceResetMounts: () -> Void
@@ -616,10 +619,12 @@ private struct MenuPopoverContentView: View {
 
             if viewModel.remotes.isEmpty {
                 emptyState
+            } else if filteredRemotes.isEmpty {
+                filteredEmptyState
             } else {
                 ScrollView {
                     LazyVStack(spacing: 10) {
-                        ForEach(viewModel.remotes) { remote in
+                        ForEach(filteredRemotes) { remote in
                             RemotePopoverRow(
                                 remote: remote,
                                 status: viewModel.status(for: remote.id),
@@ -629,6 +634,7 @@ private struct MenuPopoverContentView: View {
                                 activeEditorPlugins: activeEditorPlugins,
                                 onConnect: { onConnect(remote.id) },
                                 onDisconnect: { onDisconnect(remote.id) },
+                                onToggleFavorite: { onToggleFavorite(remote.id) },
                                 onOpenInPreferredEditor: { onOpenInPreferredEditor(remote.id) },
                                 onOpenInEditorPlugin: { pluginID in
                                     onOpenInEditorPlugin(remote.id, pluginID)
@@ -636,8 +642,10 @@ private struct MenuPopoverContentView: View {
                             )
                         }
                     }
-                    .padding(.vertical, 2)
+                    .padding(12)
                 }
+                .background(menuConnectionsFill())
+                .overlay(menuSurfaceStroke())
             }
 
             footerBar
@@ -697,10 +705,30 @@ private struct MenuPopoverContentView: View {
             }
 
             HStack(spacing: 8) {
-                metricChip(title: "Connected", value: summary.connected, tint: .green)
-                metricChip(title: "Reconnecting", value: summary.reconnecting, tint: .orange)
-                metricChip(title: "Errors", value: summary.errors, tint: .red)
-                metricChip(title: "Disconnected", value: summary.disconnected, tint: .secondary)
+                metricChipButton(
+                    filter: .connected,
+                    title: "Connected",
+                    value: summary.connected,
+                    tint: .green
+                )
+                metricChipButton(
+                    filter: .reconnecting,
+                    title: "Reconnecting",
+                    value: summary.reconnecting,
+                    tint: .orange
+                )
+                metricChipButton(
+                    filter: .errors,
+                    title: "Errors",
+                    value: summary.errors,
+                    tint: .red
+                )
+                metricChipButton(
+                    filter: .disconnected,
+                    title: "Disconnected",
+                    value: summary.disconnected,
+                    tint: .secondary
+                )
             }
         }
         .padding(14)
@@ -777,6 +805,21 @@ private struct MenuPopoverContentView: View {
         .overlay(menuSurfaceStroke())
     }
 
+    private var filteredEmptyState: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(activeStatusFilter?.emptyStateTitle ?? L10n.tr("No matching remotes"))
+                .font(.headline)
+
+            Text(activeStatusFilter?.emptyStateMessage ?? L10n.tr("Choose another filter or click the active pill again to show all remotes."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(menuSurfaceFill(accent: .gray))
+        .overlay(menuSurfaceStroke())
+    }
+
     private var footerBar: some View {
         HStack(spacing: 8) {
             Button {
@@ -811,6 +854,16 @@ private struct MenuPopoverContentView: View {
         viewModel.connectionSummary()
     }
 
+    private var filteredRemotes: [RemoteConfig] {
+        guard let activeStatusFilter else {
+            return viewModel.remotes
+        }
+
+        return viewModel.remotes.filter { remote in
+            activeStatusFilter.matches(viewModel.statusBadgeState(for: remote.id))
+        }
+    }
+
     private var preferredPluginDisplayName: String {
         editorPluginRegistry.preferredPlugin()?.displayName ?? "Editor"
     }
@@ -830,7 +883,36 @@ private struct MenuPopoverContentView: View {
         MenuBarController.recoveryReasonDisplayText(reason)
     }
 
-    private func metricChip(title: String, value: Int, tint: Color) -> some View {
+    private func metricChipButton(
+        filter: MenuPopoverStatusFilter,
+        title: String,
+        value: Int,
+        tint: Color
+    ) -> some View {
+        let isSelected = activeStatusFilter == filter
+
+        return Button {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                activeStatusFilter = isSelected ? nil : filter
+            }
+        } label: {
+            metricChip(
+                title: title,
+                value: value,
+                tint: tint,
+                isSelected: isSelected
+            )
+        }
+        .buttonStyle(.plain)
+        .help(isSelected ? L10n.tr("Click again to show all remotes") : filter.helpText)
+    }
+
+    private func metricChip(
+        title: String,
+        value: Int,
+        tint: Color,
+        isSelected: Bool
+    ) -> some View {
         HStack(spacing: 6) {
             Text(L10n.tr(title))
                 .font(.caption2)
@@ -846,7 +928,11 @@ private struct MenuPopoverContentView: View {
         .padding(.vertical, 5)
         .background(
             Capsule(style: .continuous)
-                .fill(tint.opacity(0.12))
+                .fill(tint.opacity(isSelected ? 0.24 : 0.12))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(tint.opacity(isSelected ? 0.34 : 0.16), lineWidth: 1)
         )
     }
 
@@ -869,6 +955,20 @@ private struct MenuPopoverContentView: View {
             .stroke(Color.primary.opacity(0.08), lineWidth: 1)
     }
 
+    private func menuConnectionsFill() -> some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color(NSColor.controlBackgroundColor).opacity(0.98),
+                        Color.white.opacity(0.18)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+    }
+
     private func menuNoticeFill(tint: Color) -> some View {
         RoundedRectangle(cornerRadius: 14, style: .continuous)
             .fill(tint.opacity(0.10))
@@ -877,6 +977,65 @@ private struct MenuPopoverContentView: View {
     private func menuNoticeStroke(tint: Color) -> some View {
         RoundedRectangle(cornerRadius: 14, style: .continuous)
             .stroke(tint.opacity(0.22), lineWidth: 1)
+    }
+}
+
+private enum MenuPopoverStatusFilter: Equatable {
+    case connected
+    case reconnecting
+    case errors
+    case disconnected
+
+    func matches(_ badgeState: RemoteStatusBadgeState) -> Bool {
+        switch self {
+        case .connected:
+            return badgeState == .connected
+        case .reconnecting:
+            return badgeState == .reconnecting
+        case .errors:
+            return badgeState == .error
+        case .disconnected:
+            return badgeState == .disconnected
+        }
+    }
+
+    var helpText: String {
+        switch self {
+        case .connected:
+            return L10n.tr("Show only connected remotes")
+        case .reconnecting:
+            return L10n.tr("Show only reconnecting remotes")
+        case .errors:
+            return L10n.tr("Show only remotes with errors")
+        case .disconnected:
+            return L10n.tr("Show only disconnected remotes")
+        }
+    }
+
+    var emptyStateTitle: String {
+        switch self {
+        case .connected:
+            return L10n.tr("No connected remotes")
+        case .reconnecting:
+            return L10n.tr("No reconnecting remotes")
+        case .errors:
+            return L10n.tr("No remotes with errors")
+        case .disconnected:
+            return L10n.tr("No disconnected remotes")
+        }
+    }
+
+    var emptyStateMessage: String {
+        switch self {
+        case .connected:
+            return L10n.tr("None of your remotes are currently connected.")
+        case .reconnecting:
+            return L10n.tr("No remotes are currently reconnecting.")
+        case .errors:
+            return L10n.tr("No remotes are currently in an error state.")
+        case .disconnected:
+            return L10n.tr("No remotes are currently disconnected.")
+        }
     }
 }
 
@@ -897,6 +1056,7 @@ private struct RemotePopoverRow: View {
     let activeEditorPlugins: [EditorPluginDefinition]
     let onConnect: () -> Void
     let onDisconnect: () -> Void
+    let onToggleFavorite: () -> Void
     let onOpenInPreferredEditor: () -> Void
     let onOpenInEditorPlugin: (String) -> Void
 
@@ -930,6 +1090,8 @@ private struct RemotePopoverRow: View {
                 Spacer()
 
                 StatusBadgeView(state: badgeState)
+
+                favoriteButton
             }
 
             if showsConnectionDetails {
@@ -1024,6 +1186,30 @@ private struct RemotePopoverRow: View {
         case .disconnected:
             return .blue
         }
+    }
+
+    private var favoriteButton: some View {
+        Button {
+            onToggleFavorite()
+        } label: {
+            Image(systemName: remote.isFavorite ? "star.fill" : "star")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(remote.isFavorite ? Color.yellow : Color.secondary)
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(Color(NSColor.windowBackgroundColor).opacity(0.72))
+                )
+                .overlay(
+                    Circle()
+                        .stroke(
+                            remote.isFavorite ? Color.yellow.opacity(0.34) : Color.primary.opacity(0.08),
+                            lineWidth: 1
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .help(remote.isFavorite ? L10n.tr("Remove from favorites") : L10n.tr("Add to favorites"))
     }
 
     @ViewBuilder
