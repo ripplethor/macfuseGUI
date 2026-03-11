@@ -505,7 +505,8 @@ actor MountManager {
         remote: RemoteConfig,
         password: String?,
         queuedAt: Date = Date(),
-        operationID: UUID? = nil
+        operationID: UUID? = nil,
+        fastPreConnectCleanup: Bool = false
     ) async -> RemoteStatus {
         if Task.isCancelled {
             return cachedStatus(for: remote.id)
@@ -537,11 +538,24 @@ actor MountManager {
             // If mount path is already mounted, clear stale/previous mount before reconnect.
             let existingMountRecord: MountRecord?
             do {
-                existingMountRecord = try await currentMountRecord(
-                    for: remote.localMountPoint,
-                    remoteID: remote.id,
-                    operationID: operationID
-                )
+                if fastPreConnectCleanup {
+                    diagnostics.append(
+                        level: .debug,
+                        category: "mount",
+                        message: "Using mount-table pre-connect cleanup for \(remote.displayName) at \(remote.localMountPoint)."
+                    )
+                    existingMountRecord = try await currentMountRecordViaMountTable(
+                        for: remote.localMountPoint,
+                        remoteID: remote.id,
+                        operationID: operationID
+                    )
+                } else {
+                    existingMountRecord = try await currentMountRecord(
+                        for: remote.localMountPoint,
+                        remoteID: remote.id,
+                        operationID: operationID
+                    )
+                }
             } catch {
                 // Pre-connect inspection is best-effort. If probing mount state is flaky
                 // right after wake, still attempt connect so recovery does not stall.
@@ -560,7 +574,8 @@ actor MountManager {
                 await forceStopProcesses(
                     for: remote,
                     queuedAt: Date(),
-                    operationID: operationID
+                    operationID: operationID,
+                    fastForceUnmount: fastPreConnectCleanup
                 )
                 preConnectCleanupPerformed = true
 
@@ -900,11 +915,18 @@ actor MountManager {
             if Task.isCancelled {
                 return false
             }
-            let mounted = (try? await currentMountRecord(
-                for: remote.localMountPoint,
-                remoteID: remote.id,
-                operationID: operationID
-            )) != nil
+            let mounted: Bool
+            do {
+                mounted = try await currentMountRecordViaMountTable(
+                    for: remote.localMountPoint,
+                    remoteID: remote.id,
+                    operationID: operationID
+                ) != nil
+            } catch {
+                // Treat inconclusive mount-table checks as "still mounted" so reconnect
+                // cleanup does not race ahead on a false negative.
+                mounted = true
+            }
             if !mounted {
                 return true
             }
@@ -1312,24 +1334,10 @@ actor MountManager {
             break
         }
 
-        try throwIfCancelled()
-        let attemptStartedAt = Date()
-        diagnostics.append(
-            level: .debug,
-            category: "mount",
-            message: "probe start op=mount-inspect remoteID=\(remoteText) operationID=\(operationText) path=\(normalizedMountPoint) attempt=1"
-        )
-        let mountResult = try await runner.run(
-            executable: "/sbin/mount",
-            arguments: [],
-            timeout: mountInspectionCommandTimeout
-        )
-        try throwIfCancelled()
-        let elapsedMs = Int(Date().timeIntervalSince(attemptStartedAt) * 1_000)
-        diagnostics.append(
-            level: .debug,
-            category: "mount",
-            message: "probe end op=mount-inspect remoteID=\(remoteText) operationID=\(operationText) path=\(normalizedMountPoint) attempt=1 elapsedMs=\(elapsedMs) timedOut=\(mountResult.timedOut) exit=\(mountResult.exitCode)"
+        let mountResult = try await runMountInspection(
+            for: normalizedMountPoint,
+            remoteID: remoteID,
+            operationID: operationID
         )
 
         if !mountResult.timedOut && mountResult.exitCode == 0 {
@@ -1401,6 +1409,34 @@ actor MountManager {
         }
     }
 
+    private func currentMountRecordViaMountTable(
+        for mountPoint: String,
+        remoteID: UUID? = nil,
+        operationID: UUID? = nil
+    ) async throws -> MountRecord? {
+        let normalizedMountPoint = URL(fileURLWithPath: mountPoint).standardizedFileURL.path
+        let remoteText = remoteID?.uuidString ?? "-"
+        let operationText = operationID?.uuidString ?? "-"
+        let mountResult = try await runMountInspection(
+            for: normalizedMountPoint,
+            remoteID: remoteID,
+            operationID: operationID
+        )
+
+        if !mountResult.timedOut && mountResult.exitCode == 0 {
+            let records = mountStateParser.parseMountOutput(mountResult.stdout)
+            return mountStateParser.record(forMountPoint: normalizedMountPoint, from: records)
+        }
+
+        let lastFailure = mountInspectionFailureDetail(from: mountResult)
+        diagnostics.append(
+            level: .warning,
+            category: "mount",
+            message: "Direct mount-table inspection failed for remoteID=\(remoteText) operationID=\(operationText) path=\(normalizedMountPoint): \(lastFailure)"
+        )
+        throw AppError.processFailure(L10n.format("Failed to inspect mounts: %@", lastFailure))
+    }
+
     private func currentMountRecordViaDFLookup(
         for mountPoint: String,
         remoteID: UUID? = nil,
@@ -1445,6 +1481,35 @@ actor MountManager {
             return .notMounted
         }
         return .mounted(MountRecord(source: source, mountPoint: mountedOn, filesystemType: "unknown"))
+    }
+
+    private func runMountInspection(
+        for mountPoint: String,
+        remoteID: UUID? = nil,
+        operationID: UUID? = nil
+    ) async throws -> ProcessResult {
+        let remoteText = remoteID?.uuidString ?? "-"
+        let operationText = operationID?.uuidString ?? "-"
+        try throwIfCancelled()
+        let attemptStartedAt = Date()
+        diagnostics.append(
+            level: .debug,
+            category: "mount",
+            message: "probe start op=mount-inspect remoteID=\(remoteText) operationID=\(operationText) path=\(mountPoint) attempt=1"
+        )
+        let mountResult = try await runner.run(
+            executable: "/sbin/mount",
+            arguments: [],
+            timeout: mountInspectionCommandTimeout
+        )
+        try throwIfCancelled()
+        let elapsedMs = Int(Date().timeIntervalSince(attemptStartedAt) * 1_000)
+        diagnostics.append(
+            level: .debug,
+            category: "mount",
+            message: "probe end op=mount-inspect remoteID=\(remoteText) operationID=\(operationText) path=\(mountPoint) attempt=1 elapsedMs=\(elapsedMs) timedOut=\(mountResult.timedOut) exit=\(mountResult.exitCode)"
+        )
+        return mountResult
     }
 
     private func parsedDFLine(_ line: String) -> (source: String, mountedOn: String)? {

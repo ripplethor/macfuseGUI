@@ -1362,7 +1362,8 @@ final class RemotesViewModel: ObservableObject {
                 remote: remote,
                 password: password,
                 queuedAt: queuedAt,
-                operationID: operationID
+                operationID: operationID,
+                fastPreConnectCleanup: trigger == .recovery
             )
         }
 
@@ -1376,7 +1377,8 @@ final class RemotesViewModel: ObservableObject {
                 await mountManager.forceStopProcesses(
                     for: remote,
                     queuedAt: forceStopQueuedAt,
-                    operationID: operationID
+                    operationID: operationID,
+                    fastForceUnmount: trigger == .recovery
                 )
             }
         }

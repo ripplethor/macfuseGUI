@@ -372,6 +372,33 @@ final class MountManagerParallelOperationTests: XCTestCase {
         XCTAssertLessThan(elapsed, 3.5, "Cleanup settle wait should remain bounded.")
     }
 
+    /// Beginner note: Recovery reconnects often start from a stale mount where `df -P <mount>`
+    /// itself can hang. Pre-connect cleanup should switch to mount-table-only checks so one
+    /// broken mount does not drag recovery out for the entire menu.
+    func testRecoveryConnectUsesMountTableCleanupWhenDFOnStaleMountIsSlow() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/recovery-stale-precleanup"
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            dfDelayByMountPoint: [mountPoint: 3.2],
+            unmountVisibilityDelayByMountPoint: [mountPoint: 0.35]
+        )
+        await runner.simulateExternalMount(mountPoint: mountPoint)
+        let manager = makeManager(runner: runner)
+        let remote = makeRemote(name: "Recovery Stale Cleanup", mountPoint: mountPoint)
+
+        let startedAt = Date()
+        let status = await manager.connect(
+            remote: remote,
+            password: nil,
+            fastPreConnectCleanup: true
+        )
+        let elapsed = Date().timeIntervalSince(startedAt)
+
+        XCTAssertEqual(status.state, .connected)
+        XCTAssertEqual(status.mountedPath, mountPoint)
+        XCTAssertLessThan(elapsed, 2.8, "Recovery cleanup should avoid waiting on slow stale df probes.")
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// It verifies we do not preserve "connected" forever when mount table checks keep missing.
     func testResponsivePathDoesNotPreserveConnectedForeverWithoutMountRecord() async throws {
@@ -633,6 +660,7 @@ private actor FakeMountRunner: ProcessRunning {
     private let connectDelayByMountPoint: [String: TimeInterval]
     private var connectDelayScheduleByMountPoint: [String: [TimeInterval]]
     private let mountInspectionDelay: TimeInterval
+    private let dfDelayByMountPoint: [String: TimeInterval]
     private let dfVisibilityDelayByMountPoint: [String: TimeInterval]
     private let unmountVisibilityDelayByMountPoint: [String: TimeInterval]
     private let forceUnparseableMountOutput: Bool
@@ -644,6 +672,7 @@ private actor FakeMountRunner: ProcessRunning {
         alwaysResponsivePaths: Set<String> = [],
         unreadableMountedPaths: Set<String> = [],
         timedOutDirectoryQueryPaths: Set<String> = [],
+        dfDelayByMountPoint: [String: TimeInterval] = [:],
         dfVisibilityDelayByMountPoint: [String: TimeInterval] = [:],
         unmountVisibilityDelayByMountPoint: [String: TimeInterval] = [:],
         forceUnparseableMountOutput: Bool = false
@@ -654,6 +683,7 @@ private actor FakeMountRunner: ProcessRunning {
         self.alwaysResponsivePaths = alwaysResponsivePaths
         self.unreadableMountedPaths = unreadableMountedPaths
         self.timedOutDirectoryQueryPaths = timedOutDirectoryQueryPaths
+        self.dfDelayByMountPoint = dfDelayByMountPoint
         self.dfVisibilityDelayByMountPoint = dfVisibilityDelayByMountPoint
         self.unmountVisibilityDelayByMountPoint = unmountVisibilityDelayByMountPoint
         self.forceUnparseableMountOutput = forceUnparseableMountOutput
@@ -757,7 +787,24 @@ private actor FakeMountRunner: ProcessRunning {
         }
 
         if executable == "/bin/df", let mountPoint = arguments.last {
+            let dfDelay = dfDelayByMountPoint[mountPoint] ?? 0
+            if dfDelay > 0 {
+                let boundedDelay = min(dfDelay, timeout + 0.05)
+                try? await Task.sleep(nanoseconds: UInt64(boundedDelay * 1_000_000_000))
+            }
             materializePendingUnmounts()
+            let timedOut = dfDelay > timeout
+            if timedOut {
+                return ProcessResult(
+                    executable: executable,
+                    arguments: arguments,
+                    stdout: "",
+                    stderr: "timed out",
+                    exitCode: 15,
+                    timedOut: true,
+                    duration: Date().timeIntervalSince(startedAt)
+                )
+            }
             let isMounted = mountedPoints.contains(mountPoint)
             let stdout: String
             if isMounted, isDFVisible(for: mountPoint) {
